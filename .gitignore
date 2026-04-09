@@ -1,0 +1,22 @@
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.venv/
+*.so
+_vendor/
+.pytest_cache/
+
+# Model files
+*.safetensors
+*.pth
+*.ckpt
+*.bin
+*.pt
+
+# Workflow artifacts
+workflows/*/output/
+workflows/*/models/
+workflows/*/.venv/
+uv.lock
