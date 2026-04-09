@@ -19,6 +19,7 @@ classifiers = [
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
@@ -48,10 +49,10 @@ dependencies = [
 dev = ["pytest>=7.0", "pytest-asyncio"]
 
 [project.urls]
-Repository = "https://github.com/comfy-runtime/comfy-runtime"
+Repository = "https://github.com/anyin233/comfy-runtime"
 
-[tool.setuptools]
-packages = ["comfy_runtime"]
+[tool.setuptools.packages.find]
+include = ["comfy_runtime*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
