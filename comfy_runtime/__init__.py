@@ -1,4 +1,4 @@
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 from comfy_runtime.bootstrap import bootstrap
 from comfy_runtime.config import configure, get_config

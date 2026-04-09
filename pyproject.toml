@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "comfy-runtime"
-version = "0.1.0"
+version = "0.2.0"
 description = "Minimal ComfyUI runtime for deploying custom nodes as microservices"
 readme = "README.md"
 license = "MIT"
