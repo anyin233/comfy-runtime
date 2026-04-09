@@ -1,6 +1,17 @@
 """Runtime configuration API for comfy-runtime."""
 
 
+def _activate_vendor_bridge_if_available():
+    """Activate the vendor bridge so inference-dependent modules resolve
+    to the vendored ComfyUI code. Called early in configure() so that
+    any subsequent node loading picks up the real implementations."""
+    try:
+        from comfy_runtime.compat.comfy._vendor_bridge import activate_vendor_bridge
+        activate_vendor_bridge()
+    except Exception:
+        pass  # Bridge not available or vendor code missing — compat stubs remain
+
+
 def configure(
     models_dir=None,
     output_dir=None,
@@ -84,6 +95,9 @@ def configure(
                 )
             else:
                 folder_paths.folder_names_and_paths[category] = ([cat_dir], extensions)
+
+    # Activate vendor bridge so subsequent node loading gets real implementations
+    _activate_vendor_bridge_if_available()
 
 
 def get_config():

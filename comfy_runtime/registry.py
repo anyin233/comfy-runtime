@@ -6,7 +6,7 @@ import importlib.util
 import os
 import sys
 
-from comfy_runtime._vendor import nodes as _nodes_mod
+from comfy_runtime.compat import nodes as _nodes_mod
 
 
 def register_node(class_type: str, node_cls: type, display_name: str | None = None):
@@ -99,10 +99,13 @@ def _load_v3_nodes(module, module_name: str) -> list[str]:
             else:
                 node_list = get_nodes()
             for node_cls in node_list:
-                class_type = _get_v3_class_type(node_cls)
-                _nodes_mod.NODE_CLASS_MAPPINGS[class_type] = node_cls
-                node_cls.RELATIVE_PYTHON_MODULE = module_name
-                registered.append(class_type)
+                try:
+                    class_type = _get_v3_class_type(node_cls)
+                    _nodes_mod.NODE_CLASS_MAPPINGS[class_type] = node_cls
+                    node_cls.RELATIVE_PYTHON_MODULE = module_name
+                    registered.append(class_type)
+                except Exception:
+                    pass  # Skip individual nodes that fail schema creation
     except Exception:
         pass  # V3 loading is best-effort
 
@@ -111,7 +114,12 @@ def _load_v3_nodes(module, module_name: str) -> list[str]:
 
 def _get_v3_class_type(node_cls: type) -> str:
     schema = node_cls.define_schema()
-    return schema._node_id if hasattr(schema, "_node_id") else node_cls.__name__
+    # Try _node_id first (set by finalize), then node_id, then class name
+    if hasattr(schema, "_node_id"):
+        return schema._node_id
+    if hasattr(schema, "node_id") and schema.node_id:
+        return schema.node_id
+    return node_cls.__name__
 
 
 def _load_from_directory(dirpath: str) -> list[str]:

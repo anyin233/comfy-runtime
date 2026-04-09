@@ -1,13 +1,12 @@
-"""Register all stub modules in sys.modules before any comfy imports.
+"""Register all stub and compatibility modules in sys.modules.
 
-Bootstrap order is critical — comfy_aimdo must come first because many
-ComfyUI modules import it at the top level.  The sequence is:
+Bootstrap order:
 
-1. comfy_aimdo stubs (7 import sites across ComfyUI)
+1. comfy_aimdo stubs (custom nodes may reference it)
 2. server stub (nodes_images.py imports PromptServer at module level)
-3. latent_preview stub (avoids torch/PIL/heavy-comfy imports)
-4. comfy.options shim (sets args_parsing = False so cli_args skips argparse)
-5. vendor shims (registers _vendor/ packages under short names in sys.modules)
+3. latent_preview stub (avoids heavy import chains)
+4. comfy.options shim (sets args_parsing = False)
+5. vendor shims (registers compat/ packages under short names in sys.modules)
 """
 
 import importlib
@@ -124,43 +123,24 @@ def bootstrap():
         sys.modules["av.subtitles"] = av_subtitles
         sys.modules["av.subtitles.stream"] = av_subtitles_stream
 
-    if "comfy" not in sys.modules:
-        try:
-            import comfy  # noqa: F401  # type: ignore[import-not-found]
-        except ImportError:
-            comfy_parent = types.ModuleType("comfy")
-            comfy_parent.__path__ = []
-            sys.modules["comfy"] = comfy_parent
-
-    options_module = types.ModuleType("comfy.options")
-    options_module.args_parsing = False  # type: ignore[attr-defined]
-    options_module.enable_args_parsing = lambda enable=True: None  # type: ignore[attr-defined]
+    # Install comfy.options before anything imports comfy.cli_args
+    options_module = importlib.import_module("comfy_runtime.compat.comfy.options")
     sys.modules["comfy.options"] = options_module
-    sys.modules["comfy"].options = options_module  # type: ignore[attr-defined]
 
+    # Install the compat shim layer
     from comfy_runtime.shim import install_shims
 
-    try:
-        cli_args_mod = importlib.import_module("comfy_runtime._vendor.comfy.cli_args")
-        torch = importlib.import_module("torch")
-
-        if not torch.cuda.is_available():
-            cli_args_mod.args.cpu = True
-        sys.modules["comfy.cli_args"] = cli_args_mod
-    except Exception:
-        pass
-
-    try:
-        diffusionmodules_mod = importlib.import_module(
-            "comfy_runtime._vendor.comfy.ldm.modules.diffusionmodules"
-        )
-        diffusion_mmdit_mod = importlib.import_module(
-            "comfy_runtime._vendor.comfy.ldm.modules.diffusionmodules.mmdit"
-        )
-        setattr(diffusionmodules_mod, "mmdit", diffusion_mmdit_mod)
-        sys.modules["comfy.ldm.modules.diffusionmodules"] = diffusionmodules_mod
-        sys.modules["comfy.ldm.modules.diffusionmodules.mmdit"] = diffusion_mmdit_mod
-    except Exception:
-        pass
-
     install_shims()
+
+    # Make comfy.cli_args available and set CPU mode if no CUDA
+    try:
+        cli_args_mod = importlib.import_module("comfy_runtime.compat.comfy.cli_args")
+        sys.modules["comfy.cli_args"] = cli_args_mod
+        try:
+            import torch
+            if not torch.cuda.is_available():
+                cli_args_mod.args.cpu = True
+        except ImportError:
+            cli_args_mod.args.cpu = True
+    except Exception:
+        pass

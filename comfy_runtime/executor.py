@@ -5,8 +5,8 @@ import inspect
 from importlib import import_module
 from typing import Any, cast
 
-from comfy_runtime._vendor.comfy_api.internal import _ComfyNodeInternal
-from comfy_runtime._vendor import nodes
+from comfy_runtime.compat.comfy_api.internal import _ComfyNodeInternal
+from comfy_runtime.compat import nodes
 
 
 class NodeNotFoundError(KeyError):
