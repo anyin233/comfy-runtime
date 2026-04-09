@@ -1,0 +1,16 @@
+[project]
+name = "comfyui-animatediff-evolved"
+description = "Improved AnimateDiff integration for ComfyUI."
+version = "1.5.7"
+license = { file = "LICENSE" }
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/Kosinkadink/ComfyUI-AnimateDiff-Evolved"
+
+#  Used by Comfy Registry https://comfyregistry.org
+[tool.comfy]
+PublisherId = "kosinkadink"
+DisplayName = "ComfyUI-AnimateDiff-Evolved"
+Icon = ""
+requires-comfyui = ">=0.3.68"

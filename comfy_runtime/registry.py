@@ -124,6 +124,45 @@ def _get_v3_class_type(node_cls: type) -> str:
 
 def _load_from_directory(dirpath: str) -> list[str]:
     registered = []
+
+    # If directory has __init__.py, load it as a package first
+    init_path = os.path.join(dirpath, "__init__.py")
+    if os.path.isfile(init_path):
+        module_name = os.path.basename(dirpath)
+        parent_dir = os.path.dirname(dirpath)
+        if parent_dir not in sys.path:
+            sys.path.insert(0, parent_dir)
+
+        spec = importlib.util.spec_from_file_location(
+            module_name, init_path,
+            submodule_search_locations=[dirpath],
+        )
+        if spec is not None and spec.loader is not None:
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[module_name] = module
+            try:
+                spec.loader.exec_module(module)
+            except Exception:
+                sys.modules.pop(module_name, None)
+                # Fall through to individual file loading below
+            else:
+                # Check V1 mappings
+                if hasattr(module, "NODE_CLASS_MAPPINGS"):
+                    mappings = module.NODE_CLASS_MAPPINGS
+                    if isinstance(mappings, dict):
+                        for class_type, node_cls in mappings.items():
+                            _nodes_mod.NODE_CLASS_MAPPINGS[class_type] = node_cls
+                            node_cls.RELATIVE_PYTHON_MODULE = module_name
+                            registered.append(class_type)
+
+                # Check V3
+                if hasattr(module, "comfy_entrypoint"):
+                    registered.extend(_load_v3_nodes(module, module_name))
+
+                if registered:
+                    return registered
+
+    # Fallback: load individual .py files
     for fname in sorted(os.listdir(dirpath)):
         if fname.endswith(".py") and not fname.startswith("_"):
             try:
