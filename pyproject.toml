@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "comfy-runtime"
+version = "0.1.0"
+description = "Minimal ComfyUI runtime for deploying custom nodes as microservices"
+readme = "README.md"
+license = {text = "GPL-3.0"}
+requires-python = ">=3.10"
+authors = [{name = "ComfyUI Community"}]
+keywords = ["comfyui", "runtime", "nodes", "microservice", "inference"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+  "torch",
+  "torchvision",
+  "torchaudio",
+  "numpy>=1.25.0",
+  "pillow",
+  "safetensors>=0.4.2",
+  "scipy",
+  "einops",
+  "transformers>=4.50.3",
+  "tokenizers>=0.13.3",
+  "sentencepiece",
+  "typing_extensions",
+  "tqdm",
+  "psutil",
+  "filelock",
+  "requests",
+  "torchsde",
+  "pyyaml",
+  "blake3",
+  "simpleeval>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "pytest-asyncio"]
+
+[project.urls]
+Repository = "https://github.com/comfy-runtime/comfy-runtime"
+
+[tool.setuptools]
+packages = ["comfy_runtime"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
