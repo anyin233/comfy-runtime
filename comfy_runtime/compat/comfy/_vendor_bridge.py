@@ -13,6 +13,7 @@ TODO(Phase3): Remove this file entirely once all inference is MIT.
 """
 
 import importlib
+import os
 import sys
 import logging
 
@@ -83,17 +84,38 @@ def _ensure_vendor_imports():
                 if "compat" in mod_file:
                     del sys.modules[key]
 
-        # Step 3b: Wire the mmdit attribute chain
+        # Step 3b: Wire the full ldm attribute chain for vendored comfy
+        # Many nodes access comfy.ldm.modules.diffusionmodules.mmdit.MMDiT
+        # which requires the full chain to be importable and wired as attrs.
+        _ldm_chain = [
+            "comfy.ldm",
+            "comfy.ldm.modules",
+            "comfy.ldm.modules.diffusionmodules",
+            "comfy.ldm.modules.diffusionmodules.mmdit",
+        ]
+        for mod_short in _ldm_chain:
+            vendor_name = f"comfy_runtime._vendor.{mod_short}"
+            try:
+                vendor_mod = importlib.import_module(vendor_name)
+                sys.modules[mod_short] = vendor_mod
+            except Exception:
+                pass
+
+        # Wire attribute chain: parent.child = child_module
         try:
-            diffusionmodules_mod = importlib.import_module(
-                "comfy_runtime._vendor.comfy.ldm.modules.diffusionmodules"
-            )
-            mmdit_mod = importlib.import_module(
-                "comfy_runtime._vendor.comfy.ldm.modules.diffusionmodules.mmdit"
-            )
-            setattr(diffusionmodules_mod, "mmdit", mmdit_mod)
-            sys.modules["comfy.ldm.modules.diffusionmodules"] = diffusionmodules_mod
-            sys.modules["comfy.ldm.modules.diffusionmodules.mmdit"] = mmdit_mod
+            comfy_ldm = sys.modules.get("comfy.ldm")
+            comfy_ldm_modules = sys.modules.get("comfy.ldm.modules")
+            comfy_ldm_diffmod = sys.modules.get("comfy.ldm.modules.diffusionmodules")
+            comfy_ldm_mmdit = sys.modules.get("comfy.ldm.modules.diffusionmodules.mmdit")
+            if comfy_ldm and comfy_ldm_modules:
+                comfy_ldm.modules = comfy_ldm_modules
+            if comfy_ldm_modules and comfy_ldm_diffmod:
+                comfy_ldm_modules.diffusionmodules = comfy_ldm_diffmod
+            if comfy_ldm_diffmod and comfy_ldm_mmdit:
+                comfy_ldm_diffmod.mmdit = comfy_ldm_mmdit
+            # Also wire ldm onto comfy
+            if comfy_ldm:
+                vendor_comfy.ldm = comfy_ldm
         except Exception:
             pass
 
@@ -121,6 +143,29 @@ def _ensure_vendor_imports():
                             if val is not None:
                                 setattr(vendor_mod, attr, val)
                 sys.modules[mod_name] = vendor_mod
+            except Exception:
+                pass
+
+        # Step 4b: Register comfy_extras from the ComfyUI installation
+        # Many custom nodes import from comfy_extras.* (e.g. nodes_mask, chainner_models)
+        comfyui_root = os.environ.get("COMFYUI_ROOT")
+        if comfyui_root is None:
+            # Try common locations
+            for candidate in [
+                os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+                    os.path.dirname(os.path.abspath(__file__))))), "..", "ComfyUI"),
+                "/home/yanweiye/Project/ComfyUI",
+            ]:
+                if os.path.isdir(os.path.join(candidate, "comfy_extras")):
+                    comfyui_root = os.path.abspath(candidate)
+                    break
+
+        if comfyui_root and os.path.isdir(os.path.join(comfyui_root, "comfy_extras")):
+            if comfyui_root not in sys.path:
+                sys.path.insert(0, comfyui_root)
+            # Ensure comfy_extras is importable
+            try:
+                importlib.import_module("comfy_extras")
             except Exception:
                 pass
 
