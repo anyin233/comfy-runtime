@@ -32,6 +32,7 @@ class ComfyExtension(ABC):
 # UI namespace stub — nodes that import UI/ui get a minimal namespace
 class _UIStub:
     """Minimal UI stub — Phase 5 will add full UI support."""
+
     pass
 
 
@@ -41,6 +42,7 @@ UI = ui
 
 class _InputStub:
     """Stub for Input namespace used by some nodes."""
+
     pass
 
 
@@ -49,6 +51,7 @@ Input = _InputStub()
 
 class _InputImplStub:
     """Stub for InputImpl namespace."""
+
     pass
 
 
@@ -56,10 +59,19 @@ InputImpl = _InputImplStub()
 
 
 try:
-    from ._util import VideoCodec, VideoContainer, VideoComponents, MESH, VOXEL, File3D, SVG as _SVG
+    from ._util import (
+        VideoCodec,
+        VideoContainer,
+        VideoComponents,
+        MESH,
+        VOXEL,
+        File3D,
+        SVG as _SVG,
+    )
 
     class Types:
         """Types namespace with video/3D type stubs."""
+
         VideoCodec = VideoCodec
         VideoContainer = VideoContainer
         VideoComponents = VideoComponents
@@ -67,13 +79,16 @@ try:
         VOXEL = VOXEL
         File3D = File3D
 except ImportError:
+
     class Types:
         """Fallback Types namespace."""
+
         pass
 
 
 class _ComfyAPIStub:
     """Stub for ComfyAPI class."""
+
     pass
 
 

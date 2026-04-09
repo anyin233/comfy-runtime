@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 # Enums
 # ---------------------------------------------------------------------------
 
+
 class VRAMState(enum.Enum):
     DISABLED = 0
     NO_VRAM = 1
@@ -72,6 +73,7 @@ _interrupt_lock = threading.Lock()
 # ---------------------------------------------------------------------------
 # Device detection (at import time)
 # ---------------------------------------------------------------------------
+
 
 def _detect_state():
     global cpu_state, vram_state, set_vram_to, total_vram, lowvram_available
@@ -130,6 +132,7 @@ def _detect_state():
         try:
             import xformers
             import xformers.ops
+
             XFORMERS_IS_AVAILABLE = True
             XFORMERS_ENABLED_VAE = True
             XFORMERS_VERSION = xformers.__version__
@@ -146,6 +149,7 @@ _detect_state()
 # ---------------------------------------------------------------------------
 # Device query functions
 # ---------------------------------------------------------------------------
+
 
 def get_torch_device() -> torch.device:
     """Return the primary compute device."""
@@ -195,7 +199,9 @@ def is_nvidia() -> bool:
         return False
     try:
         name = torch.cuda.get_device_name().lower()
-        return "nvidia" in name or "geforce" in name or "quadro" in name or "tesla" in name
+        return (
+            "nvidia" in name or "geforce" in name or "quadro" in name or "tesla" in name
+        )
     except Exception:
         return False
 
@@ -238,6 +244,7 @@ def is_wsl() -> bool:
 # Memory query functions
 # ---------------------------------------------------------------------------
 
+
 def get_total_memory(dev=None, torch_total_too=False):
     """Return total memory (in bytes) on *dev*."""
     if dev is None:
@@ -255,8 +262,8 @@ def get_total_memory(dev=None, torch_total_too=False):
         return total
     except Exception:
         if torch_total_too:
-            return 1024 ** 3, 0
-        return 1024 ** 3
+            return 1024**3, 0
+        return 1024**3
 
 
 def get_free_memory(dev=None, torch_free_too=False):
@@ -271,20 +278,23 @@ def get_free_memory(dev=None, torch_free_too=False):
     try:
         stats = torch.cuda.mem_get_info(dev)
         mem_free_total = stats[0]
-        mem_free_torch = torch.cuda.memory_reserved(dev) - torch.cuda.memory_allocated(dev)
+        mem_free_torch = torch.cuda.memory_reserved(dev) - torch.cuda.memory_allocated(
+            dev
+        )
         mem_free_total += mem_free_torch
         if torch_free_too:
             return mem_free_total, mem_free_torch
         return mem_free_total
     except Exception:
         if torch_free_too:
-            return 1024 ** 3, 0
-        return 1024 ** 3
+            return 1024**3, 0
+        return 1024**3
 
 
 # ---------------------------------------------------------------------------
 # Dtype selection
 # ---------------------------------------------------------------------------
+
 
 def dtype_size(dtype) -> int:
     """Return the byte size of a single element of *dtype*."""
@@ -329,7 +339,9 @@ def supports_fp8_compute(device=None) -> bool:
         return False
 
 
-def should_use_fp16(device=None, model_params=0, prioritize_performance=True, manual_cast=False) -> bool:
+def should_use_fp16(
+    device=None, model_params=0, prioritize_performance=True, manual_cast=False
+) -> bool:
     """Determine whether fp16 should be used on *device*."""
     if FORCE_FP32:
         return False
@@ -359,7 +371,9 @@ def should_use_fp16(device=None, model_params=0, prioritize_performance=True, ma
         return False
 
 
-def should_use_bf16(device=None, model_params=0, prioritize_performance=True, manual_cast=False) -> bool:
+def should_use_bf16(
+    device=None, model_params=0, prioritize_performance=True, manual_cast=False
+) -> bool:
     """Determine whether bf16 should be used on *device*."""
     if FORCE_FP32:
         return False
@@ -402,7 +416,11 @@ def unet_dtype(
         return torch.float8_e4m3fn
     if args.fp8_e5m2_unet:
         return torch.float8_e5m2
-    if hasattr(args, "fp8_e8m0fnu_unet") and args.fp8_e8m0fnu_unet and hasattr(torch, "float8_e8m0fnu"):
+    if (
+        hasattr(args, "fp8_e8m0fnu_unet")
+        and args.fp8_e8m0fnu_unet
+        and hasattr(torch, "float8_e8m0fnu")
+    ):
         return torch.float8_e8m0fnu
 
     if device is None:
@@ -428,9 +446,13 @@ def unet_dtype(
 
     # Fallback with manual_cast
     for dtype in supported_dtypes:
-        if dtype == torch.float16 and should_use_fp16(device, model_params, manual_cast=True):
+        if dtype == torch.float16 and should_use_fp16(
+            device, model_params, manual_cast=True
+        ):
             return torch.float16
-        if dtype == torch.bfloat16 and should_use_bf16(device, model_params, manual_cast=True):
+        if dtype == torch.bfloat16 and should_use_bf16(
+            device, model_params, manual_cast=True
+        ):
             return torch.bfloat16
 
     return torch.float32
@@ -503,6 +525,7 @@ def intermediate_dtype() -> torch.dtype:
 # Device placement functions
 # ---------------------------------------------------------------------------
 
+
 def vae_device() -> torch.device:
     """Return device for VAE inference."""
     if args.cpu_vae:
@@ -531,7 +554,9 @@ def text_encoder_offload_device() -> torch.device:
     return torch.device("cpu")
 
 
-def text_encoder_initial_device(load_device, offload_device, model_size=0) -> torch.device:
+def text_encoder_initial_device(
+    load_device, offload_device, model_size=0
+) -> torch.device:
     """Return initial device for loading text encoders."""
     if args.gpu_only:
         return load_device
@@ -573,6 +598,7 @@ def maximum_vram_for_weights(device=None) -> int:
 # ---------------------------------------------------------------------------
 # LoadedModel tracker
 # ---------------------------------------------------------------------------
+
 
 class LoadedModel:
     """Tracks a model loaded into memory with device placement."""
@@ -643,8 +669,14 @@ class LoadedModel:
 # Model loading / unloading
 # ---------------------------------------------------------------------------
 
-def load_models_gpu(models, memory_required=0, force_patch_weights=False,
-                    minimum_memory_required=None, force_full_load=False):
+
+def load_models_gpu(
+    models,
+    memory_required=0,
+    force_patch_weights=False,
+    minimum_memory_required=None,
+    force_full_load=False,
+):
     """Load a list of models onto the compute device.
 
     Args:
@@ -667,7 +699,9 @@ def load_models_gpu(models, memory_required=0, force_patch_weights=False,
         # Check if already loaded
         already_loaded = False
         for loaded in current_loaded_models:
-            if loaded.model is model or (hasattr(model, "model") and loaded.model is model.model):
+            if loaded.model is model or (
+                hasattr(model, "model") and loaded.model is model.model
+            ):
                 loaded.currently_used = True
                 already_loaded = True
                 break
@@ -679,13 +713,15 @@ def load_models_gpu(models, memory_required=0, force_patch_weights=False,
         return
 
     # Free memory if needed
-    total_mem_needed = sum(
-        m.model_size() if hasattr(m, "model_size") else 0
-        for m in models_to_load
-    ) + memory_required
+    total_mem_needed = (
+        sum(m.model_size() if hasattr(m, "model_size") else 0 for m in models_to_load)
+        + memory_required
+    )
 
     if total_mem_needed > 0:
-        free_memory(total_mem_needed, device, keep_loaded=[m for m in models if m is not None])
+        free_memory(
+            total_mem_needed, device, keep_loaded=[m for m in models if m is not None]
+        )
 
     # Load each model
     for model in models_to_load:
@@ -703,8 +739,14 @@ def load_model_gpu(model):
     load_models_gpu([model])
 
 
-def free_memory(memory_required, device, keep_loaded=None, for_dynamic=False,
-                pins_required=0, ram_required=0):
+def free_memory(
+    memory_required,
+    device,
+    keep_loaded=None,
+    for_dynamic=False,
+    pins_required=0,
+    ram_required=0,
+):
     """Free device memory by unloading models.
 
     Args:
@@ -802,6 +844,7 @@ def soft_empty_cache(force=False):
 # Attention flags
 # ---------------------------------------------------------------------------
 
+
 def xformers_enabled() -> bool:
     return XFORMERS_IS_AVAILABLE and not args.disable_xformers
 
@@ -834,13 +877,19 @@ def force_upcast_attention_dtype() -> Optional[dict]:
     if args.dont_upcast_attention:
         return None
     if args.force_upcast_attention:
-        return {"q": torch.float32, "k": torch.float32, "v": torch.float32, "out": torch.float32}
+        return {
+            "q": torch.float32,
+            "k": torch.float32,
+            "v": torch.float32,
+            "out": torch.float32,
+        }
     return None
 
 
 # ---------------------------------------------------------------------------
 # Synchronize / interrupt
 # ---------------------------------------------------------------------------
+
 
 def synchronize():
     """Synchronize the compute device."""
@@ -853,6 +902,7 @@ def synchronize():
 
 class InterruptProcessingException(Exception):
     """Raised when processing is interrupted by the user."""
+
     pass
 
 
@@ -875,6 +925,7 @@ def throw_exception_if_processing_interrupted():
 # ---------------------------------------------------------------------------
 # Tensor utilities
 # ---------------------------------------------------------------------------
+
 
 def pin_memory(tensor):
     """Pin *tensor* in CPU memory for faster transfers."""
@@ -902,7 +953,9 @@ def cast_to_device(tensor, device, dtype, copy=False):
     return tensor.to(device=device, dtype=dtype, copy=copy)
 
 
-def cast_to(weight, dtype=None, device=None, non_blocking=False, copy=False, stream=None, r=None):
+def cast_to(
+    weight, dtype=None, device=None, non_blocking=False, copy=False, stream=None, r=None
+):
     """Cast *weight* to given dtype/device."""
     if device is None and dtype is None:
         return weight

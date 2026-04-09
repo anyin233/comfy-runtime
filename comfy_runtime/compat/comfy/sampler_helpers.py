@@ -62,8 +62,9 @@ def cond_cat(c_list: List) -> Any:
     return c_list[0]
 
 
-def calc_cond_uncond_batch(model, cond, uncond, x_in, timestep,
-                           model_options) -> Tuple[torch.Tensor, torch.Tensor]:
+def calc_cond_uncond_batch(
+    model, cond, uncond, x_in, timestep, model_options
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """Calculate conditioned and unconditioned predictions in a batch.
 
     Args:

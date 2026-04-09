@@ -12,6 +12,7 @@ import torch
 # Base class
 # ---------------------------------------------------------------------------
 
+
 class LatentFormat:
     """Base latent format with configurable scale and channel count.
 
@@ -56,6 +57,7 @@ class LatentFormat:
 # ---------------------------------------------------------------------------
 # Architecture-specific formats
 # ---------------------------------------------------------------------------
+
 
 class SD15(LatentFormat):
     """Stable Diffusion 1.5 latent format."""

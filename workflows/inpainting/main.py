@@ -37,7 +37,9 @@ CFG = 8.0
 SEED = random.randint(0, 2**63)
 
 
-def create_center_mask(height: int, width: int, margin_ratio: float = 0.25) -> torch.Tensor:
+def create_center_mask(
+    height: int, width: int, margin_ratio: float = 0.25
+) -> torch.Tensor:
     """Create a binary mask with 1s in the center region.
 
     Args:
@@ -70,13 +72,15 @@ def main():
     # Load checkpoint
     print(f"\n=== Loading checkpoint: {CHECKPOINT} ===")
     model, clip, vae = comfy_runtime.execute_node(
-        "CheckpointLoaderSimple", ckpt_name=CHECKPOINT,
+        "CheckpointLoaderSimple",
+        ckpt_name=CHECKPOINT,
     )
 
     # Load input image
     print(f"\n=== Loading input image: {INPUT_IMAGE} ===")
     image, _ = comfy_runtime.execute_node(
-        "LoadImage", image=INPUT_IMAGE,
+        "LoadImage",
+        image=INPUT_IMAGE,
     )
     print(f"  Image shape: {image.shape}")
     h, w = image.shape[1], image.shape[2]
@@ -89,38 +93,54 @@ def main():
     # Encode image to latent
     print("\n=== Encoding image to latent ===")
     latent = comfy_runtime.execute_node(
-        "VAEEncode", pixels=image, vae=vae,
+        "VAEEncode",
+        pixels=image,
+        vae=vae,
     )[0]
 
     # Set noise mask on latent (tells KSampler which region to regenerate)
     print("=== Setting noise mask ===")
     masked_latent = comfy_runtime.execute_node(
-        "SetLatentNoiseMask", samples=latent, mask=mask,
+        "SetLatentNoiseMask",
+        samples=latent,
+        mask=mask,
     )[0]
 
     # Encode prompts
     print("\n=== Encoding prompts ===")
     positive = comfy_runtime.execute_node(
-        "CLIPTextEncode", clip=clip, text=PROMPT,
+        "CLIPTextEncode",
+        clip=clip,
+        text=PROMPT,
     )[0]
     negative = comfy_runtime.execute_node(
-        "CLIPTextEncode", clip=clip, text=NEGATIVE_PROMPT,
+        "CLIPTextEncode",
+        clip=clip,
+        text=NEGATIVE_PROMPT,
     )[0]
 
     # Sample: regenerate masked region
     print(f"\n=== Inpainting (steps={STEPS}, seed={SEED}) ===")
     sampled = comfy_runtime.execute_node(
         "KSampler",
-        model=model, positive=positive, negative=negative,
-        latent_image=masked_latent, seed=SEED, steps=STEPS,
-        cfg=CFG, sampler_name="euler", scheduler="normal",
+        model=model,
+        positive=positive,
+        negative=negative,
+        latent_image=masked_latent,
+        seed=SEED,
+        steps=STEPS,
+        cfg=CFG,
+        sampler_name="euler",
+        scheduler="normal",
         denoise=1.0,
     )[0]
 
     # Decode and save
     print("\n=== Decoding VAE ===")
     images = comfy_runtime.execute_node(
-        "VAEDecode", samples=sampled, vae=vae,
+        "VAEDecode",
+        samples=sampled,
+        vae=vae,
     )[0]
     if hasattr(images, "detach"):
         images = images.detach()
@@ -128,7 +148,9 @@ def main():
 
     print("\n=== Saving image ===")
     comfy_runtime.execute_node(
-        "SaveImage", images=images, filename_prefix="Inpaint",
+        "SaveImage",
+        images=images,
+        filename_prefix="Inpaint",
     )
     print(f"\nDone! Output saved to: {OUTPUT_DIR}/")
 

@@ -16,20 +16,24 @@ logger = logging.getLogger(__name__)
 # Enums
 # ---------------------------------------------------------------------------
 
+
 class EnumWeightTarget(enum.Enum):
     """Target for hook weight application."""
+
     Clip = "clip"
     Model = "model"
 
 
 class InterpolationMethod(enum.Enum):
     """Interpolation method for keyframe transitions."""
+
     LINEAR = "linear"
 
 
 # ---------------------------------------------------------------------------
 # HookKeyframe
 # ---------------------------------------------------------------------------
+
 
 class HookKeyframe:
     """A single timing keyframe for hook scheduling.
@@ -42,8 +46,12 @@ class HookKeyframe:
         guarantee_steps: Minimum steps this keyframe stays active.
     """
 
-    def __init__(self, strength: float = 1.0, start_percent: float = 0.0,
-                 guarantee_steps: int = 1):
+    def __init__(
+        self,
+        strength: float = 1.0,
+        start_percent: float = 0.0,
+        guarantee_steps: int = 1,
+    ):
         """Initialize HookKeyframe.
 
         Args:
@@ -71,6 +79,7 @@ class HookKeyframe:
 # ---------------------------------------------------------------------------
 # HookKeyframeGroup
 # ---------------------------------------------------------------------------
+
 
 class HookKeyframeGroup:
     """Group of keyframes defining a hook's schedule over time.
@@ -144,6 +153,7 @@ class HookKeyframeGroup:
 # HookGroup
 # ---------------------------------------------------------------------------
 
+
 class HookGroup:
     """Group of hooks to be applied together during sampling.
 
@@ -186,8 +196,9 @@ class HookGroup:
         return len(self.hooks) == 0
 
     @classmethod
-    def combine_all_hooks(cls, hooks_list: List[Optional["HookGroup"]],
-                          require_count: int = 0) -> Optional["HookGroup"]:
+    def combine_all_hooks(
+        cls, hooks_list: List[Optional["HookGroup"]], require_count: int = 0
+    ) -> Optional["HookGroup"]:
         """Combine multiple HookGroups into one.
 
         Args:
@@ -218,10 +229,14 @@ class HookGroup:
 # Hook factory functions
 # ---------------------------------------------------------------------------
 
-def create_hook_lora(lora: Any, strength_model: float = 1.0,
-                     strength_clip: float = 1.0,
-                     keyframe_group: Optional[HookKeyframeGroup] = None,
-                     **kwargs) -> Any:
+
+def create_hook_lora(
+    lora: Any,
+    strength_model: float = 1.0,
+    strength_clip: float = 1.0,
+    keyframe_group: Optional[HookKeyframeGroup] = None,
+    **kwargs,
+) -> Any:
     """Create a LoRA-based hook.
 
     Args:
@@ -246,9 +261,12 @@ def create_hook_lora(lora: Any, strength_model: float = 1.0,
     return hook
 
 
-def create_hook_model_as_lora(model: Any, strength: float = 1.0,
-                              keyframe_group: Optional[HookKeyframeGroup] = None,
-                              **kwargs) -> Any:
+def create_hook_model_as_lora(
+    model: Any,
+    strength: float = 1.0,
+    keyframe_group: Optional[HookKeyframeGroup] = None,
+    **kwargs,
+) -> Any:
     """Create a hook that treats a full model as a LoRA.
 
     Args:
@@ -271,7 +289,9 @@ def create_hook_model_as_lora(model: Any, strength: float = 1.0,
     return hook
 
 
-def get_patch_weights_from_model(model: Any, discard_model_sampling: bool = True) -> Dict:
+def get_patch_weights_from_model(
+    model: Any, discard_model_sampling: bool = True
+) -> Dict:
     """Extract patchable weights from a model.
 
     Args:
@@ -282,7 +302,11 @@ def get_patch_weights_from_model(model: Any, discard_model_sampling: bool = True
         Dict of weight name -> tensor.
     """
     # TODO(Phase3): Implement weight extraction.
-    if model is not None and hasattr(model, "model") and hasattr(model.model, "state_dict"):
+    if (
+        model is not None
+        and hasattr(model, "model")
+        and hasattr(model.model, "state_dict")
+    ):
         sd = model.model.state_dict()
         if discard_model_sampling:
             sd = {k: v for k, v in sd.items() if "model_sampling" not in k}
@@ -293,6 +317,7 @@ def get_patch_weights_from_model(model: Any, discard_model_sampling: bool = True
 # ---------------------------------------------------------------------------
 # Conditioning helper functions
 # ---------------------------------------------------------------------------
+
 
 def set_hooks_for_conditioning(cond: Any, hooks: Optional[HookGroup]) -> Any:
     """Attach hooks to conditioning data.
@@ -348,8 +373,9 @@ def set_conds_props(cond: Any, **kwargs) -> Any:
     return cond
 
 
-def set_conds_props_and_combine(conds: List[Any], new_conds: List[Any],
-                                **kwargs) -> List[Any]:
+def set_conds_props_and_combine(
+    conds: List[Any], new_conds: List[Any], **kwargs
+) -> List[Any]:
     """Set properties on new_conds and combine with existing conds.
 
     Args:
@@ -368,8 +394,9 @@ def set_conds_props_and_combine(conds: List[Any], new_conds: List[Any],
     return list(conds) + list(modified)
 
 
-def set_default_conds_and_combine(conds: Optional[List], new_conds: Optional[List],
-                                  **kwargs) -> List:
+def set_default_conds_and_combine(
+    conds: Optional[List], new_conds: Optional[List], **kwargs
+) -> List:
     """Set default properties and combine conditioning lists.
 
     Args:

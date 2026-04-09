@@ -38,7 +38,8 @@ def _load_custom_node_dir(path):
 
     try:
         spec = importlib.util.spec_from_file_location(
-            module_name, init_path,
+            module_name,
+            init_path,
             submodule_search_locations=[path],
         )
         mod = importlib.util.module_from_spec(spec)
@@ -51,9 +52,9 @@ def _load_custom_node_dir(path):
 
 
 CUSTOM_NODES = [
-    ("was-node-suite-comfyui", 100),   # WAS Node Suite: 200+ nodes
-    ("ComfyUI_IPAdapter_plus", 20),    # IPAdapter Plus: 30+ nodes
-    ("ComfyUI-KJNodes", 100),          # KJNodes: 200+ nodes
+    ("was-node-suite-comfyui", 100),  # WAS Node Suite: 200+ nodes
+    ("ComfyUI_IPAdapter_plus", 20),  # IPAdapter Plus: 30+ nodes
+    ("ComfyUI-KJNodes", 100),  # KJNodes: 200+ nodes
     ("ComfyUI-Advanced-ControlNet", 20),  # Advanced ControlNet: 40+ nodes
     ("ComfyUI-AnimateDiff-Evolved", 50),  # AnimateDiff: 140+ nodes
 ]
@@ -66,8 +67,9 @@ def setup():
     _setup_runtime()
 
 
-@pytest.mark.parametrize("dirname,min_nodes", CUSTOM_NODES,
-                         ids=[n[0] for n in CUSTOM_NODES])
+@pytest.mark.parametrize(
+    "dirname,min_nodes", CUSTOM_NODES, ids=[n[0] for n in CUSTOM_NODES]
+)
 def test_custom_node_loads(dirname, min_nodes):
     """Each custom node pack loads and registers at least min_nodes nodes."""
     path = os.path.join(CUSTOM_NODES_DIR, dirname)

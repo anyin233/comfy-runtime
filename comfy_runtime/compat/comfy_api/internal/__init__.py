@@ -13,6 +13,7 @@ from typing import Optional, Callable, Any
 # Helper functions
 # ---------------------------------------------------------------------------
 
+
 def prune_dict(d: dict) -> dict:
     """Return a copy of *d* with None values removed."""
     return {k: v for k, v in d.items() if v is not None}
@@ -33,7 +34,8 @@ def copy_class(cls: type) -> type:
     if cls is None:
         return None
     cls_dict = {
-        k: v for k, v in cls.__dict__.items()
+        k: v
+        for k, v in cls.__dict__.items()
         if k not in ("__dict__", "__weakref__", "__module__", "__doc__")
     }
     new_cls = type(cls.__name__, (cls,), cls_dict)
@@ -51,6 +53,7 @@ def shallow_clone_class(cls, new_name=None):
 
 class classproperty:
     """Descriptor for class-level properties."""
+
     def __init__(self, f):
         self.f = f
 
@@ -58,7 +61,9 @@ class classproperty:
         return self.f(owner)
 
 
-def first_real_override(cls: type, name: str, *, base: type = None) -> Optional[Callable]:
+def first_real_override(
+    cls: type, name: str, *, base: type = None
+) -> Optional[Callable]:
     """Return the override of *name* on *cls* that is not the base placeholder."""
     if base is None:
         if not hasattr(cls, "GET_BASE_CLASS"):
@@ -82,8 +87,10 @@ def first_real_override(cls: type, name: str, *, base: type = None) -> Optional[
 # API Registry stubs
 # ---------------------------------------------------------------------------
 
+
 class ComfyAPIBase:
     """Base class for versioned ComfyAPI."""
+
     VERSION = "base"
     STABLE = False
 
@@ -93,6 +100,7 @@ class ComfyAPIBase:
 
 class ComfyAPIWithVersion(ComfyAPIBase):
     """ComfyAPI with version tracking."""
+
     pass
 
 
@@ -110,6 +118,7 @@ def get_all_versions():
 # Node base classes
 # ---------------------------------------------------------------------------
 
+
 class _ComfyNodeInternal:
     """Base class that all V3-based node APIs inherit from.
 
@@ -117,10 +126,10 @@ class _ComfyNodeInternal:
     """
 
     @classmethod
-    def GET_NODE_INFO_V1(cls):
-        ...
+    def GET_NODE_INFO_V1(cls): ...
 
 
 class _NodeOutputInternal:
     """Base class that all V3-based NodeOutput objects inherit from."""
+
     pass

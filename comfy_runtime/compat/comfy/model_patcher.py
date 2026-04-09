@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 # ModelPatcher
 # ---------------------------------------------------------------------------
 
+
 class ModelPatcher:
     """Wraps a PyTorch model with support for weight patching (LoRA, etc.).
 
@@ -38,8 +39,14 @@ class ModelPatcher:
         object_patches_backup: Backup of object patches.
     """
 
-    def __init__(self, model, load_device=None, offload_device=None,
-                 size: int = 0, weight_inplace_update: bool = False):
+    def __init__(
+        self,
+        model,
+        load_device=None,
+        offload_device=None,
+        size: int = 0,
+        weight_inplace_update: bool = False,
+    ):
         """Initialize ModelPatcher.
 
         Args:
@@ -50,8 +57,12 @@ class ModelPatcher:
             weight_inplace_update: If True, modify weights in-place.
         """
         self.model = model
-        self.load_device = load_device if load_device is not None else torch.device("cpu")
-        self.offload_device = offload_device if offload_device is not None else torch.device("cpu")
+        self.load_device = (
+            load_device if load_device is not None else torch.device("cpu")
+        )
+        self.offload_device = (
+            offload_device if offload_device is not None else torch.device("cpu")
+        )
         self.size = size
         self.weight_inplace_update = weight_inplace_update
 
@@ -62,7 +73,9 @@ class ModelPatcher:
         self.backup: Dict[str, torch.Tensor] = {}
         self.object_patches_backup: Dict[str, Any] = {}
 
-        self.current_device = offload_device if offload_device is not None else torch.device("cpu")
+        self.current_device = (
+            offload_device if offload_device is not None else torch.device("cpu")
+        )
         self.is_patched = False
 
         # Populate model_keys from the model's state dict
@@ -113,8 +126,9 @@ class ModelPatcher:
 
         return cloned
 
-    def add_patches(self, patches: Dict, strength_patch: float = 1.0,
-                    strength_model: float = 1.0) -> Set[str]:
+    def add_patches(
+        self, patches: Dict, strength_patch: float = 1.0, strength_model: float = 1.0
+    ) -> Set[str]:
         """Register weight patches to be applied before inference.
 
         Args:
@@ -181,8 +195,14 @@ class ModelPatcher:
             to[name] = []
         to[name].append(patch)
 
-    def set_model_patch_replace(self, patch, name: str, block_name: str,
-                                number: int, transformer_index: Optional[int] = None):
+    def set_model_patch_replace(
+        self,
+        patch,
+        name: str,
+        block_name: str,
+        number: int,
+        transformer_index: Optional[int] = None,
+    ):
         """Set a replacement patch for a specific transformer block.
 
         Args:
@@ -212,7 +232,9 @@ class ModelPatcher:
         """
         self.set_model_patch(patch, "attn2_patch")
 
-    def set_model_attn1_replace(self, patch, block_name, number, transformer_index=None):
+    def set_model_attn1_replace(
+        self, patch, block_name, number, transformer_index=None
+    ):
         """Replace self-attention in a specific block.
 
         Args:
@@ -221,9 +243,13 @@ class ModelPatcher:
             number: Block number.
             transformer_index: Optional transformer layer index.
         """
-        self.set_model_patch_replace(patch, "attn1", block_name, number, transformer_index)
+        self.set_model_patch_replace(
+            patch, "attn1", block_name, number, transformer_index
+        )
 
-    def set_model_attn2_replace(self, patch, block_name, number, transformer_index=None):
+    def set_model_attn2_replace(
+        self, patch, block_name, number, transformer_index=None
+    ):
         """Replace cross-attention in a specific block.
 
         Args:
@@ -232,7 +258,9 @@ class ModelPatcher:
             number: Block number.
             transformer_index: Optional transformer layer index.
         """
-        self.set_model_patch_replace(patch, "attn2", block_name, number, transformer_index)
+        self.set_model_patch_replace(
+            patch, "attn2", block_name, number, transformer_index
+        )
 
     def set_model_attn1_output_patch(self, patch):
         """Set a post-self-attention output patch.
@@ -274,7 +302,9 @@ class ModelPatcher:
         """
         self.set_model_patch(patch, "output_block_patch")
 
-    def set_model_sampler_cfg_function(self, sampler_cfg_function, disable_cfg1_optimization=False):
+    def set_model_sampler_cfg_function(
+        self, sampler_cfg_function, disable_cfg1_optimization=False
+    ):
         """Set a custom CFG function.
 
         Args:
@@ -286,7 +316,9 @@ class ModelPatcher:
         to = self.model_options.setdefault("sampler_cfg_function", [])
         to.append(sampler_cfg_function)
 
-    def set_model_sampler_post_cfg_function(self, post_cfg_function, disable_cfg1_optimization=False):
+    def set_model_sampler_post_cfg_function(
+        self, post_cfg_function, disable_cfg1_optimization=False
+    ):
         """Set a post-CFG callback function.
 
         Args:
@@ -297,7 +329,9 @@ class ModelPatcher:
             self.model_options, post_cfg_function, disable_cfg1_optimization
         )
 
-    def set_model_sampler_pre_cfg_function(self, pre_cfg_function, disable_cfg1_optimization=False):
+    def set_model_sampler_pre_cfg_function(
+        self, pre_cfg_function, disable_cfg1_optimization=False
+    ):
         """Set a pre-CFG callback function.
 
         Args:
@@ -327,7 +361,11 @@ class ModelPatcher:
             The patched model.
         """
         # TODO(Phase3): Implement actual weight patching logic.
-        if device_to is not None and self.model is not None and hasattr(self.model, "to"):
+        if (
+            device_to is not None
+            and self.model is not None
+            and hasattr(self.model, "to")
+        ):
             self.model.to(device_to)
             self.current_device = device_to
         self.is_patched = True
@@ -341,7 +379,11 @@ class ModelPatcher:
             unpatch_weights: Whether to restore original weights.
         """
         # TODO(Phase3): Implement actual weight restoration.
-        if device_to is not None and self.model is not None and hasattr(self.model, "to"):
+        if (
+            device_to is not None
+            and self.model is not None
+            and hasattr(self.model, "to")
+        ):
             self.model.to(device_to)
             self.current_device = device_to
         self.is_patched = False
@@ -371,6 +413,7 @@ class ModelPatcher:
 # model_options helper functions
 # ---------------------------------------------------------------------------
 
+
 def create_model_options_clone(model_options: Dict) -> Dict:
     """Deep copy a model_options dict.
 
@@ -387,9 +430,14 @@ def create_model_options_clone(model_options: Dict) -> Dict:
     return copy.deepcopy(model_options)
 
 
-def set_model_options_patch_replace(model_options: Dict, patch, name: str,
-                                    block_name: str, number: int,
-                                    transformer_index: Optional[int] = None) -> Dict:
+def set_model_options_patch_replace(
+    model_options: Dict,
+    patch,
+    name: str,
+    block_name: str,
+    number: int,
+    transformer_index: Optional[int] = None,
+) -> Dict:
     """Set a patch replacement in model_options for a specific block.
 
     Args:
@@ -416,8 +464,9 @@ def set_model_options_patch_replace(model_options: Dict, patch, name: str,
     return model_options
 
 
-def set_model_options_post_cfg_function(model_options: Dict, post_cfg_function,
-                                        disable_cfg1_optimization: bool = False) -> Dict:
+def set_model_options_post_cfg_function(
+    model_options: Dict, post_cfg_function, disable_cfg1_optimization: bool = False
+) -> Dict:
     """Add a post-CFG callback to model_options.
 
     Args:
@@ -435,8 +484,9 @@ def set_model_options_post_cfg_function(model_options: Dict, post_cfg_function,
     return model_options
 
 
-def set_model_options_pre_cfg_function(model_options: Dict, pre_cfg_function,
-                                       disable_cfg1_optimization: bool = False) -> Dict:
+def set_model_options_pre_cfg_function(
+    model_options: Dict, pre_cfg_function, disable_cfg1_optimization: bool = False
+) -> Dict:
     """Add a pre-CFG callback to model_options.
 
     Args:

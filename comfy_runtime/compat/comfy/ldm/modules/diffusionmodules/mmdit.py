@@ -21,7 +21,7 @@ def get_1d_sincos_pos_embed_from_grid_torch(embed_dim, pos):
     assert embed_dim % 2 == 0
     omega = torch.arange(embed_dim // 2, dtype=torch.float64, device=pos.device)
     omega /= embed_dim / 2.0
-    omega = 1.0 / (10000 ** omega)
+    omega = 1.0 / (10000**omega)
 
     pos = pos.reshape(-1)
     out = torch.einsum("m,d->md", pos.double(), omega)

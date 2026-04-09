@@ -76,7 +76,7 @@ def _wire_attribute_chain(pkg_name, compat_mod):
         if not key.startswith(prefix) or mod is None:
             continue
 
-        parts = key[len(prefix):].split(".")
+        parts = key[len(prefix) :].split(".")
 
         for depth in range(len(parts)):
             if depth == 0:
@@ -94,7 +94,7 @@ def _wire_attribute_chain(pkg_name, compat_mod):
                     setattr(parent, child_name, mod)
             else:
                 if not hasattr(parent, child_name):
-                    child_key = f"{pkg_name}.{'.'.join(parts[:depth + 1])}"
+                    child_key = f"{pkg_name}.{'.'.join(parts[: depth + 1])}"
                     child_mod = sys.modules.get(child_key)
                     if child_mod is None:
                         try:

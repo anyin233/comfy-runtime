@@ -19,10 +19,14 @@ logger = logging.getLogger(__name__)
 # cast_bias_weight
 # ---------------------------------------------------------------------------
 
-def cast_bias_weight(s: nn.Module, input: Optional[torch.Tensor] = None,
-                     dtype: Optional[torch.dtype] = None,
-                     device: Optional[torch.device] = None,
-                     bias_dtype: Optional[torch.dtype] = None):
+
+def cast_bias_weight(
+    s: nn.Module,
+    input: Optional[torch.Tensor] = None,
+    dtype: Optional[torch.dtype] = None,
+    device: Optional[torch.device] = None,
+    bias_dtype: Optional[torch.dtype] = None,
+):
     """Cast a module's weight and bias to match the input tensor.
 
     Moves the module's weight (and optionally bias) to the same dtype
@@ -66,6 +70,7 @@ def cast_bias_weight(s: nn.Module, input: Optional[torch.Tensor] = None,
 # ---------------------------------------------------------------------------
 # disable_weight_init — module namespace with init-skipping layers
 # ---------------------------------------------------------------------------
+
 
 class _Linear(nn.Linear):
     """Linear layer that skips weight initialization.
@@ -183,6 +188,7 @@ disable_weight_init = _DisableWeightInit()
 # manual_cast — layers that cast inputs to match weight dtype
 # ---------------------------------------------------------------------------
 
+
 class _CastLinear(_Linear):
     """Linear that casts input to weight dtype before forward pass."""
 
@@ -245,8 +251,13 @@ class _CastConv3d(_Conv3d):
         """
         weight, bias = cast_bias_weight(self, input)
         return torch.nn.functional.conv3d(
-            input, weight, bias,
-            self.stride, self.padding, self.dilation, self.groups,
+            input,
+            weight,
+            bias,
+            self.stride,
+            self.padding,
+            self.dilation,
+            self.groups,
         )
 
 

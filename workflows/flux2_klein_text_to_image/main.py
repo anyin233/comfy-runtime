@@ -71,10 +71,18 @@ def main():
     # Verify all required nodes are available
     available = comfy_runtime.list_nodes()
     required = [
-        "UNETLoader", "CLIPLoader", "VAELoader", "CLIPTextEncode",
-        "VAEDecode", "SaveImage",  # built-in
-        "CFGGuider", "KSamplerSelect", "RandomNoise",
-        "SamplerCustomAdvanced", "Flux2Scheduler", "EmptyFlux2LatentImage",  # extra
+        "UNETLoader",
+        "CLIPLoader",
+        "VAELoader",
+        "CLIPTextEncode",
+        "VAEDecode",
+        "SaveImage",  # built-in
+        "CFGGuider",
+        "KSamplerSelect",
+        "RandomNoise",
+        "SamplerCustomAdvanced",
+        "Flux2Scheduler",
+        "EmptyFlux2LatentImage",  # extra
     ]
     for node_name in required:
         assert node_name in available, f"Missing node: {node_name}"

@@ -58,8 +58,12 @@ def main():
     # Verify built-in nodes are available
     available = comfy_runtime.list_nodes()
     required = [
-        "CheckpointLoaderSimple", "CLIPTextEncode", "EmptyLatentImage",
-        "KSampler", "VAEDecode", "SaveImage",
+        "CheckpointLoaderSimple",
+        "CLIPTextEncode",
+        "EmptyLatentImage",
+        "KSampler",
+        "VAEDecode",
+        "SaveImage",
     ]
     for node_name in required:
         assert node_name in available, f"Missing built-in node: {node_name}"

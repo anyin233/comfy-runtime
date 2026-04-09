@@ -31,6 +31,7 @@ WORKFLOWS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "workflows")
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _configure(workflow_name, **extra):
     """Configure comfy_runtime for a given workflow."""
     wf_dir = os.path.join(WORKFLOWS_DIR, workflow_name)
@@ -51,7 +52,8 @@ def _load_workflow_nodes(workflow_name):
     nodes_dir = os.path.join(WORKFLOWS_DIR, workflow_name, "nodes")
     if os.path.isdir(nodes_dir):
         node_files = sorted(
-            f for f in os.listdir(nodes_dir)
+            f
+            for f in os.listdir(nodes_dir)
             if f.endswith(".py") and not f.startswith("_")
         )
         registered = []
@@ -69,12 +71,17 @@ def _load_workflow_nodes(workflow_name):
 # SD 1.5 Text-to-Image
 # ===================================================================
 
+
 class TestSD15TextToImage:
     """Tests for the sd15_text_to_image workflow."""
 
     REQUIRED_NODES = [
-        "CheckpointLoaderSimple", "CLIPTextEncode", "EmptyLatentImage",
-        "KSampler", "VAEDecode", "SaveImage",
+        "CheckpointLoaderSimple",
+        "CLIPTextEncode",
+        "EmptyLatentImage",
+        "KSampler",
+        "VAEDecode",
+        "SaveImage",
     ]
 
     def test_configure(self):
@@ -89,16 +96,22 @@ class TestSD15TextToImage:
     def test_empty_latent_image(self):
         _configure("sd15_text_to_image")
         latent = comfy_runtime.execute_node(
-            "EmptyLatentImage", width=512, height=512, batch_size=1,
+            "EmptyLatentImage",
+            width=512,
+            height=512,
+            batch_size=1,
         )[0]
         assert "samples" in latent
         assert latent["samples"].shape == (1, 4, 64, 64)
 
     def test_checkpoint_loader_raises_not_implemented(self):
         _configure("sd15_text_to_image")
-        with pytest.raises(comfy_runtime.NodeExecutionError, match="not yet implemented|not found"):
+        with pytest.raises(
+            comfy_runtime.NodeExecutionError, match="not yet implemented|not found"
+        ):
             comfy_runtime.execute_node(
-                "CheckpointLoaderSimple", ckpt_name="nonexistent.safetensors",
+                "CheckpointLoaderSimple",
+                ckpt_name="nonexistent.safetensors",
             )
 
 
@@ -106,17 +119,26 @@ class TestSD15TextToImage:
 # Flux.2 Klein Text-to-Image
 # ===================================================================
 
+
 class TestFlux2KleinTextToImage:
     """Tests for the flux2_klein_text_to_image workflow."""
 
     BUILT_IN_NODES = [
-        "UNETLoader", "CLIPLoader", "VAELoader", "CLIPTextEncode",
-        "VAEDecode", "SaveImage",
+        "UNETLoader",
+        "CLIPLoader",
+        "VAELoader",
+        "CLIPTextEncode",
+        "VAEDecode",
+        "SaveImage",
     ]
 
     EXTRA_NODES = [
-        "CFGGuider", "KSamplerSelect", "RandomNoise",
-        "SamplerCustomAdvanced", "Flux2Scheduler", "EmptyFlux2LatentImage",
+        "CFGGuider",
+        "KSamplerSelect",
+        "RandomNoise",
+        "SamplerCustomAdvanced",
+        "Flux2Scheduler",
+        "EmptyFlux2LatentImage",
     ]
 
     def test_configure(self):
@@ -140,7 +162,10 @@ class TestFlux2KleinTextToImage:
         _configure("flux2_klein_text_to_image")
         _load_workflow_nodes("flux2_klein_text_to_image")
         latent = comfy_runtime.execute_node(
-            "EmptyFlux2LatentImage", width=1024, height=1024, batch_size=1,
+            "EmptyFlux2LatentImage",
+            width=1024,
+            height=1024,
+            batch_size=1,
         )[0]
         assert "samples" in latent
         # Flux2 uses 128 channels, spatial_downscale=16
@@ -150,7 +175,10 @@ class TestFlux2KleinTextToImage:
         _configure("flux2_klein_text_to_image")
         _load_workflow_nodes("flux2_klein_text_to_image")
         sigmas = comfy_runtime.execute_node(
-            "Flux2Scheduler", steps=20, width=1024, height=1024,
+            "Flux2Scheduler",
+            steps=20,
+            width=1024,
+            height=1024,
         )[0]
         assert isinstance(sigmas, torch.Tensor)
         assert len(sigmas) == 21  # steps + 1
@@ -160,7 +188,8 @@ class TestFlux2KleinTextToImage:
         _configure("flux2_klein_text_to_image")
         _load_workflow_nodes("flux2_klein_text_to_image")
         sampler = comfy_runtime.execute_node(
-            "KSamplerSelect", sampler_name="euler",
+            "KSamplerSelect",
+            sampler_name="euler",
         )[0]
         assert sampler is not None
 
@@ -168,7 +197,8 @@ class TestFlux2KleinTextToImage:
         _configure("flux2_klein_text_to_image")
         _load_workflow_nodes("flux2_klein_text_to_image")
         noise = comfy_runtime.execute_node(
-            "RandomNoise", noise_seed=42,
+            "RandomNoise",
+            noise_seed=42,
         )[0]
         assert noise is not None
         assert hasattr(noise, "generate_noise")
@@ -185,7 +215,9 @@ class TestFlux2KleinTextToImage:
 
     def test_unet_loader_raises_not_implemented(self):
         _configure("flux2_klein_text_to_image")
-        with pytest.raises(comfy_runtime.NodeExecutionError, match="not yet implemented|not found"):
+        with pytest.raises(
+            comfy_runtime.NodeExecutionError, match="not yet implemented|not found"
+        ):
             comfy_runtime.execute_node(
                 "UNETLoader",
                 unet_name="nonexistent.safetensors",
@@ -197,12 +229,18 @@ class TestFlux2KleinTextToImage:
 # Image-to-Image
 # ===================================================================
 
+
 class TestImg2Img:
     """Tests for the img2img workflow."""
 
     REQUIRED_NODES = [
-        "CheckpointLoaderSimple", "LoadImage", "VAEEncode",
-        "CLIPTextEncode", "KSampler", "VAEDecode", "SaveImage",
+        "CheckpointLoaderSimple",
+        "LoadImage",
+        "VAEEncode",
+        "CLIPTextEncode",
+        "KSampler",
+        "VAEDecode",
+        "SaveImage",
     ]
 
     def test_configure(self):
@@ -228,12 +266,18 @@ class TestImg2Img:
 # Hires Fix
 # ===================================================================
 
+
 class TestHiresFix:
     """Tests for the hires_fix workflow."""
 
     REQUIRED_NODES = [
-        "CheckpointLoaderSimple", "CLIPTextEncode", "EmptyLatentImage",
-        "KSampler", "LatentUpscale", "VAEDecode", "SaveImage",
+        "CheckpointLoaderSimple",
+        "CLIPTextEncode",
+        "EmptyLatentImage",
+        "KSampler",
+        "LatentUpscale",
+        "VAEDecode",
+        "SaveImage",
     ]
 
     def test_configure(self):
@@ -254,7 +298,8 @@ class TestHiresFix:
             "LatentUpscale",
             samples=latent,
             upscale_method="nearest-exact",
-            width=1024, height=1024,
+            width=1024,
+            height=1024,
             crop="disabled",
         )[0]
         assert upscaled["samples"].shape == (1, 4, 128, 128)
@@ -264,7 +309,10 @@ class TestHiresFix:
         _configure("hires_fix")
         # Pass 1: Create 512x512 latent
         latent = comfy_runtime.execute_node(
-            "EmptyLatentImage", width=512, height=512, batch_size=1,
+            "EmptyLatentImage",
+            width=512,
+            height=512,
+            batch_size=1,
         )[0]
         assert latent["samples"].shape == (1, 4, 64, 64)
 
@@ -273,7 +321,8 @@ class TestHiresFix:
             "LatentUpscale",
             samples=latent,
             upscale_method="nearest-exact",
-            width=1024, height=1024,
+            width=1024,
+            height=1024,
             crop="disabled",
         )[0]
         assert upscaled["samples"].shape == (1, 4, 128, 128)
@@ -283,13 +332,19 @@ class TestHiresFix:
 # Area Composition
 # ===================================================================
 
+
 class TestAreaComposition:
     """Tests for the area_composition workflow."""
 
     REQUIRED_NODES = [
-        "CheckpointLoaderSimple", "CLIPTextEncode", "EmptyLatentImage",
-        "ConditioningSetArea", "ConditioningCombine", "KSampler",
-        "VAEDecode", "SaveImage",
+        "CheckpointLoaderSimple",
+        "CLIPTextEncode",
+        "EmptyLatentImage",
+        "ConditioningSetArea",
+        "ConditioningCombine",
+        "KSampler",
+        "VAEDecode",
+        "SaveImage",
     ]
 
     def test_configure(self):
@@ -314,7 +369,11 @@ class TestAreaComposition:
         left_area = comfy_runtime.execute_node(
             "ConditioningSetArea",
             conditioning=left_cond,
-            width=448, height=512, x=0, y=0, strength=1.0,
+            width=448,
+            height=512,
+            x=0,
+            y=0,
+            strength=1.0,
         )[0]
         assert len(left_area) == 1
         assert "area" in left_area[0][1]
@@ -322,7 +381,11 @@ class TestAreaComposition:
         right_area = comfy_runtime.execute_node(
             "ConditioningSetArea",
             conditioning=right_cond,
-            width=448, height=512, x=320, y=0, strength=1.0,
+            width=448,
+            height=512,
+            x=320,
+            y=0,
+            strength=1.0,
         )[0]
 
         # Combine
@@ -345,13 +408,19 @@ class TestAreaComposition:
 # Inpainting
 # ===================================================================
 
+
 class TestInpainting:
     """Tests for the inpainting workflow."""
 
     REQUIRED_NODES = [
-        "CheckpointLoaderSimple", "LoadImage", "VAEEncode",
-        "SetLatentNoiseMask", "CLIPTextEncode", "KSampler",
-        "VAEDecode", "SaveImage",
+        "CheckpointLoaderSimple",
+        "LoadImage",
+        "VAEEncode",
+        "SetLatentNoiseMask",
+        "CLIPTextEncode",
+        "KSampler",
+        "VAEDecode",
+        "SaveImage",
     ]
 
     def test_configure(self):
@@ -371,7 +440,9 @@ class TestInpainting:
         mask[128:384, 128:384] = 1.0
 
         masked = comfy_runtime.execute_node(
-            "SetLatentNoiseMask", samples=latent, mask=mask,
+            "SetLatentNoiseMask",
+            samples=latent,
+            mask=mask,
         )[0]
         assert "noise_mask" in masked
         assert "samples" in masked
@@ -381,7 +452,8 @@ class TestInpainting:
         _configure("inpainting")
         cond = [[torch.randn(1, 77, 768), {}]]
         result = comfy_runtime.execute_node(
-            "ConditioningZeroOut", conditioning=cond,
+            "ConditioningZeroOut",
+            conditioning=cond,
         )[0]
         assert torch.all(result[0][0] == 0)
 
@@ -389,6 +461,7 @@ class TestInpainting:
 # ===================================================================
 # ESRGAN Upscale
 # ===================================================================
+
 
 class TestEsrganUpscale:
     """Tests for the esrgan_upscale workflow."""
@@ -403,7 +476,10 @@ class TestEsrganUpscale:
         registered = _load_workflow_nodes("esrgan_upscale")
         # May fail if spandrel not installed — that's OK
         if registered:
-            assert "UpscaleModelLoader" in registered or "ImageUpscaleWithModel" in registered
+            assert (
+                "UpscaleModelLoader" in registered
+                or "ImageUpscaleWithModel" in registered
+            )
 
     def test_builtin_nodes_available(self):
         _configure("esrgan_upscale")
@@ -416,19 +492,23 @@ class TestEsrganUpscale:
 # Cross-workflow: verify no GPL code loaded
 # ===================================================================
 
+
 class TestModuleArchitecture:
     """Verify the compat/vendor bridge architecture."""
 
     def test_compat_namespace_registered(self):
         """Key comfy.* modules should be in sys.modules."""
         import comfy_runtime
+
         for mod_name in ["comfy.cli_args"]:
             assert mod_name in sys.modules, f"Missing module: {mod_name}"
 
     def test_configure_activates_vendor_bridge(self):
         """After configure(), vendor modules are available for inference."""
         import comfy_runtime
+
         _configure("sd15_text_to_image")
         # After configure, comfy.samplers should have KSampler with SAMPLERS
         import comfy.samplers
+
         assert hasattr(comfy.samplers, "KSampler")

@@ -16,8 +16,10 @@ logger = logging.getLogger(__name__)
 # Noise preparation
 # ---------------------------------------------------------------------------
 
-def prepare_noise(latent_image: torch.Tensor, seed: int,
-                  noise_inds: Optional[torch.Tensor] = None) -> torch.Tensor:
+
+def prepare_noise(
+    latent_image: torch.Tensor, seed: int, noise_inds: Optional[torch.Tensor] = None
+) -> torch.Tensor:
     """Generate reproducible noise matching the shape of latent_image.
 
     Creates a CPU-based random noise tensor using the given seed for
@@ -66,7 +68,10 @@ def prepare_noise(latent_image: torch.Tensor, seed: int,
 # Latent channel fixing
 # ---------------------------------------------------------------------------
 
-def fix_empty_latent_channels(model, latent_image: torch.Tensor, downscale_ratio_spacial=None) -> torch.Tensor:
+
+def fix_empty_latent_channels(
+    model, latent_image: torch.Tensor, downscale_ratio_spacial=None
+) -> torch.Tensor:
     """Ensure latent_image has the correct number of channels for the model.
 
     If the model expects more channels than the latent has, pads with zeros.
@@ -107,7 +112,9 @@ def fix_empty_latent_channels(model, latent_image: torch.Tensor, downscale_ratio
         # Pad with zeros
         pad_shape = list(latent_image.shape)
         pad_shape[1] = expected_channels - current_channels
-        padding = torch.zeros(pad_shape, dtype=latent_image.dtype, device=latent_image.device)
+        padding = torch.zeros(
+            pad_shape, dtype=latent_image.dtype, device=latent_image.device
+        )
         return torch.cat([latent_image, padding], dim=1)
 
     # Truncate extra channels
@@ -118,9 +125,23 @@ def fix_empty_latent_channels(model, latent_image: torch.Tensor, downscale_ratio
 # Top-level sampling stubs
 # ---------------------------------------------------------------------------
 
-def sample(model, noise, positive, negative, cfg, device, sampler, sigmas,
-           model_options=None, latent_image=None, denoise_mask=None,
-           callback=None, disable_pbar=False, seed=None):
+
+def sample(
+    model,
+    noise,
+    positive,
+    negative,
+    cfg,
+    device,
+    sampler,
+    sigmas,
+    model_options=None,
+    latent_image=None,
+    denoise_mask=None,
+    callback=None,
+    disable_pbar=False,
+    seed=None,
+):
     """Run the standard sampling pipeline.
 
     This is the main entry point called by KSampler and related nodes.
@@ -156,10 +177,21 @@ def sample(model, noise, positive, negative, cfg, device, sampler, sigmas,
     )
 
 
-def sample_custom(model, noise, cfg, sampler_object, sigmas,
-                  positive=None, negative=None, latent_image=None,
-                  denoise_mask=None, callback=None, disable_pbar=False,
-                  seed=None, model_options=None):
+def sample_custom(
+    model,
+    noise,
+    cfg,
+    sampler_object,
+    sigmas,
+    positive=None,
+    negative=None,
+    latent_image=None,
+    denoise_mask=None,
+    callback=None,
+    disable_pbar=False,
+    seed=None,
+    model_options=None,
+):
     """Run sampling with a custom sampler object.
 
     Provides a lower-level interface for custom sampling workflows.

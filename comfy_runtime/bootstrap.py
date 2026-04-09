@@ -138,6 +138,7 @@ def bootstrap():
         sys.modules["comfy.cli_args"] = cli_args_mod
         try:
             import torch
+
             if not torch.cuda.is_available():
                 cli_args_mod.args.cpu = True
         except ImportError:

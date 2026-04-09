@@ -21,11 +21,13 @@ logger = logging.getLogger(__name__)
 # Prediction type mixins — set model_type on the class
 # ---------------------------------------------------------------------------
 
+
 class EPS:
     """Epsilon (noise) prediction mixin.
 
     Models predict the noise added to the sample.
     """
+
     model_type = "eps"
 
     def calculate_denoised(self, sigma, model_output, model_input):
@@ -50,6 +52,7 @@ class V_PREDICTION:
 
     Models predict velocity v = alpha * eps - sigma * x0.
     """
+
     model_type = "v_prediction"
 
     def calculate_denoised(self, sigma, model_output, model_input):
@@ -64,7 +67,7 @@ class V_PREDICTION:
             Estimated clean sample.
         """
         sigma = sigma.view(sigma.shape[:1] + (1,) * (model_input.ndim - 1))
-        alpha = (1.0 - sigma ** 2) ** 0.5
+        alpha = (1.0 - sigma**2) ** 0.5
         return model_input * alpha - model_output * sigma
 
 
@@ -73,6 +76,7 @@ class X0:
 
     Models directly predict the clean sample.
     """
+
     model_type = "x0"
 
     def calculate_denoised(self, sigma, model_output, model_input):
@@ -91,6 +95,7 @@ class X0:
 
 class EDM:
     """EDM (Elucidating Diffusion Models) prediction mixin."""
+
     model_type = "edm"
 
     def calculate_denoised(self, sigma, model_output, model_input):
@@ -109,6 +114,7 @@ class EDM:
 
 class CONST:
     """Constant noise schedule mixin."""
+
     model_type = "const"
 
     def calculate_denoised(self, sigma, model_output, model_input):
@@ -127,6 +133,7 @@ class CONST:
 
 class IMG_TO_IMG:
     """Image-to-image prediction mixin."""
+
     model_type = "img_to_img"
 
     def calculate_denoised(self, sigma, model_output, model_input):
@@ -145,6 +152,7 @@ class IMG_TO_IMG:
 
 class IMG_TO_IMG_FLOW:
     """Image-to-image flow matching prediction mixin."""
+
     model_type = "img_to_img_flow"
 
     def calculate_denoised(self, sigma, model_output, model_input):
@@ -163,6 +171,7 @@ class IMG_TO_IMG_FLOW:
 
 class COSMOS_RFLOW:
     """Cosmos RFlow prediction mixin."""
+
     model_type = "cosmos_rflow"
 
     def calculate_denoised(self, sigma, model_output, model_input):
@@ -182,6 +191,7 @@ class COSMOS_RFLOW:
 # ---------------------------------------------------------------------------
 # Discrete sampling base
 # ---------------------------------------------------------------------------
+
 
 class ModelSamplingDiscrete:
     """Discrete noise schedule sampling.
@@ -217,7 +227,7 @@ class ModelSamplingDiscrete:
         # Standard DDPM linear beta schedule
         beta_start = 0.00085
         beta_end = 0.012
-        betas = torch.linspace(beta_start ** 0.5, beta_end ** 0.5, num_timesteps) ** 2
+        betas = torch.linspace(beta_start**0.5, beta_end**0.5, num_timesteps) ** 2
         alphas = 1.0 - betas
         alphas_cumprod = torch.cumprod(alphas, dim=0)
         self.sigmas = ((1.0 - alphas_cumprod) / alphas_cumprod) ** 0.5
@@ -290,6 +300,7 @@ class ModelSamplingDiscrete:
 # Continuous EDM sampling
 # ---------------------------------------------------------------------------
 
+
 class ModelSamplingContinuousEDM:
     """Continuous EDM noise schedule.
 
@@ -358,6 +369,7 @@ class ModelSamplingContinuousEDM:
 # Continuous V-prediction sampling
 # ---------------------------------------------------------------------------
 
+
 class ModelSamplingContinuousV:
     """Continuous V-prediction noise schedule.
 
@@ -420,6 +432,7 @@ class ModelSamplingContinuousV:
 # ---------------------------------------------------------------------------
 # Flux-specific sampling
 # ---------------------------------------------------------------------------
+
 
 class ModelSamplingFlux:
     """Flux-specific sampling with shift parameter.
@@ -515,6 +528,7 @@ class ModelSamplingFlux:
 # Discrete flow matching
 # ---------------------------------------------------------------------------
 
+
 class ModelSamplingDiscreteFlow:
     """Discrete flow matching sampling.
 
@@ -594,6 +608,7 @@ class ModelSamplingDiscreteFlow:
 # Cosmos RFlow sampling
 # ---------------------------------------------------------------------------
 
+
 class ModelSamplingCosmosRFlow:
     """Cosmos RFlow sampling schedule.
 
@@ -655,6 +670,7 @@ class ModelSamplingCosmosRFlow:
 # ---------------------------------------------------------------------------
 # Stable Cascade sampling
 # ---------------------------------------------------------------------------
+
 
 class StableCascadeSampling:
     """Stable Cascade noise schedule.

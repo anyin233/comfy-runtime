@@ -15,6 +15,7 @@ import torch
 # Sigma schedule functions
 # ---------------------------------------------------------------------------
 
+
 def get_sigmas_karras(n, sigma_min, sigma_max, rho=7.0, device="cpu"):
     """Karras et al. 2022 sigma schedule.
 
@@ -29,16 +30,18 @@ def get_sigmas_karras(n, sigma_min, sigma_max, rho=7.0, device="cpu"):
 
 def get_sigmas_exponential(n, sigma_min, sigma_max, device="cpu"):
     """Exponential sigma schedule."""
-    sigmas = torch.linspace(math.log(sigma_max), math.log(sigma_min), n, device=device).exp()
+    sigmas = torch.linspace(
+        math.log(sigma_max), math.log(sigma_min), n, device=device
+    ).exp()
     return torch.cat([sigmas, sigmas.new_zeros([1])])
 
 
 def get_sigmas_polyexponential(n, sigma_min, sigma_max, rho=1.0, device="cpu"):
     """Polyexponential sigma schedule."""
     ramp = torch.linspace(1, 0, n, device=device)
-    sigmas = sigma_min ** (1 - ramp) * sigma_max ** ramp
+    sigmas = sigma_min ** (1 - ramp) * sigma_max**ramp
     if rho != 1.0:
-        sigmas = sigmas ** rho
+        sigmas = sigmas**rho
     return torch.cat([sigmas, sigmas.new_zeros([1])])
 
 
@@ -57,20 +60,21 @@ def get_sigmas_laplace(n, sigma_min, sigma_max, mu=0.0, beta=0.5, device="cpu"):
         u_normalized = (u - u_min) / (u_max - u_min)
     else:
         u_normalized = torch.linspace(0, 1, n, device=device)
-    sigmas = sigma_max ** (1 - u_normalized) * sigma_min ** u_normalized
+    sigmas = sigma_max ** (1 - u_normalized) * sigma_min**u_normalized
     return torch.cat([sigmas, sigmas.new_zeros([1])])
 
 
 def get_sigmas_vp(n, beta_d=19.9, beta_min=0.1, eps_s=1e-3, device="cpu"):
     """Variance-preserving sigma schedule."""
     t = torch.linspace(1, eps_s, n, device=device)
-    sigmas = torch.sqrt(torch.exp(beta_d * t ** 2 / 2 + beta_min * t) - 1)
+    sigmas = torch.sqrt(torch.exp(beta_d * t**2 / 2 + beta_min * t) - 1)
     return torch.cat([sigmas, sigmas.new_zeros([1])])
 
 
 # ---------------------------------------------------------------------------
 # Helper functions referenced by nodes
 # ---------------------------------------------------------------------------
+
 
 def sigma_to_half_log_snr(sigma):
     """Convert sigma to half log SNR: 0.5 * log(1/sigma^2)."""

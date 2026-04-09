@@ -98,6 +98,7 @@ class ProgressBar:
 # Tensor file I/O
 # ---------------------------------------------------------------------------
 
+
 def load_torch_file(ckpt, safe_load=False, device=None, return_metadata=False):
     """Load a .safetensors or PyTorch checkpoint file.
 
@@ -160,6 +161,7 @@ def save_torch_file(sd, ckpt, metadata=None):
 # State dict manipulation
 # ---------------------------------------------------------------------------
 
+
 def calculate_parameters(sd, prefix=""):
     """Count the total number of scalar parameters in *sd*."""
     params = 0
@@ -195,7 +197,7 @@ def state_dict_prefix_replace(state_dict, replace_prefix, filter_keys=False):
     for rp, new_prefix in replace_prefix.items():
         keys = [k for k in list(state_dict.keys()) if k.startswith(rp)]
         for k in keys:
-            out[new_prefix + k[len(rp):]] = state_dict.pop(k)
+            out[new_prefix + k[len(rp) :]] = state_dict.pop(k)
     return out
 
 
@@ -239,7 +241,9 @@ def transformers_convert(sd, prefix_from, prefix_to, number):
             if k_from in sd:
                 weights = sd.pop(k_from)
                 shape_from = weights.shape[0] // 3
-                for i, proj in enumerate(("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj")):
+                for i, proj in enumerate(
+                    ("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj")
+                ):
                     k_to = f"{prefix_to}encoder.layers.{resblock}.{proj}.{y}"
                     sd[k_to] = weights[shape_from * i : shape_from * (i + 1)]
     return sd
@@ -253,13 +257,16 @@ def clip_text_transformers_convert(sd, prefix_from, prefix_to):
         sd[f"{prefix_to}text_projection.weight"] = sd.pop(tp)
     tp = f"{prefix_from}text_projection"
     if tp in sd:
-        sd[f"{prefix_to}text_projection.weight"] = sd.pop(tp).transpose(0, 1).contiguous()
+        sd[f"{prefix_to}text_projection.weight"] = (
+            sd.pop(tp).transpose(0, 1).contiguous()
+        )
     return sd
 
 
 # ---------------------------------------------------------------------------
 # Tensor utilities
 # ---------------------------------------------------------------------------
+
 
 def repeat_to_batch_size(tensor, batch_size, dim=0):
     """Repeat or narrow *tensor* along *dim* to match *batch_size*."""
@@ -281,7 +288,9 @@ def resize_to_batch_size(tensor, batch_size):
     if batch_size <= 1:
         return tensor[:batch_size]
 
-    output = torch.empty([batch_size] + list(tensor.shape)[1:], dtype=tensor.dtype, device=tensor.device)
+    output = torch.empty(
+        [batch_size] + list(tensor.shape)[1:], dtype=tensor.dtype, device=tensor.device
+    )
     if batch_size < in_batch_size:
         scale = (in_batch_size - 1) / (batch_size - 1)
         for i in range(batch_size):
@@ -382,11 +391,14 @@ def get_attr(obj, attr: str):
 # Image / latent upscaling
 # ---------------------------------------------------------------------------
 
+
 def bislerp(samples, width, height):
     """Attempt bi-slerp upscaling; falls back to bilinear on error."""
     try:
         # Slerp between bilinear and nearest for sharper upscaling
-        bilinear = interpolate(samples, size=(height, width), mode="bilinear", align_corners=False)
+        bilinear = interpolate(
+            samples, size=(height, width), mode="bilinear", align_corners=False
+        )
         nearest = interpolate(samples, size=(height, width), mode="nearest-exact")
 
         # Blend: use bilinear for low frequencies, nearest for high
@@ -399,11 +411,14 @@ def bislerp(samples, width, height):
         out = torch.where(
             mask,
             bilinear,
-            (torch.sin((1.0 - t) * omega) / so) * bilinear + (torch.sin(t * omega) / so) * nearest,
+            (torch.sin((1.0 - t) * omega) / so) * bilinear
+            + (torch.sin(t * omega) / so) * nearest,
         )
         return out
     except Exception:
-        return interpolate(samples, size=(height, width), mode="bilinear", align_corners=False)
+        return interpolate(
+            samples, size=(height, width), mode="bilinear", align_corners=False
+        )
 
 
 def lanczos(samples, width, height):
@@ -482,6 +497,7 @@ def get_tiled_scale_steps(width, height, tile_x, tile_y, overlap):
 # Safetensors header
 # ---------------------------------------------------------------------------
 
+
 def safetensors_header(safetensors_path, max_size=100 * 1024 * 1024):
     """Read and return the JSON header bytes of a safetensors file."""
     with open(safetensors_path, "rb") as f:
@@ -495,6 +511,7 @@ def safetensors_header(safetensors_path, max_size=100 * 1024 * 1024):
 # ---------------------------------------------------------------------------
 # Seed / hashing
 # ---------------------------------------------------------------------------
+
 
 def string_to_seed(data):
     """CRC32-based seed from byte data."""
@@ -515,6 +532,7 @@ def string_to_seed(data):
 # Misc
 # ---------------------------------------------------------------------------
 
+
 def reshape_mask(input_mask, output_shape):
     """Reshape a mask tensor to match *output_shape*."""
     dims = len(output_shape) - 2
@@ -525,7 +543,9 @@ def reshape_mask(input_mask, output_shape):
     if mask.shape[-dims:] != output_shape[-dims:]:
         mask = interpolate(mask.float(), size=output_shape[-dims:], mode=scale_mode)
     if mask.shape[0] < output_shape[0]:
-        mask = mask.repeat([math.ceil(output_shape[0] / mask.shape[0])] + [1] * (dims + 1))[:output_shape[0]]
+        mask = mask.repeat(
+            [math.ceil(output_shape[0] / mask.shape[0])] + [1] * (dims + 1)
+        )[: output_shape[0]]
     return mask
 
 
@@ -538,7 +558,10 @@ def deepcopy_list_dict(obj, memo=None):
         return memo[obj_id]
 
     if isinstance(obj, dict):
-        res = {deepcopy_list_dict(k, memo): deepcopy_list_dict(v, memo) for k, v in obj.items()}
+        res = {
+            deepcopy_list_dict(k, memo): deepcopy_list_dict(v, memo)
+            for k, v in obj.items()
+        }
     elif isinstance(obj, list):
         res = [deepcopy_list_dict(i, memo) for i in obj]
     else:

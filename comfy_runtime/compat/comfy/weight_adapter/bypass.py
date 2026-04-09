@@ -23,8 +23,9 @@ class BypassWeightAdapter:
         patches: Dict of weight patches.
     """
 
-    def __init__(self, name: str = "", strength: float = 1.0,
-                 patches: Optional[Dict] = None):
+    def __init__(
+        self, name: str = "", strength: float = 1.0, patches: Optional[Dict] = None
+    ):
         """Initialize BypassWeightAdapter.
 
         Args:
@@ -62,7 +63,9 @@ class BypassWeightAdapter:
             BypassWeightAdapter instance.
         """
         # TODO(Phase3): Implement bypass LoRA loading.
-        return BypassWeightAdapter(name="bypass_lora", strength=strength, patches=lora_sd)
+        return BypassWeightAdapter(
+            name="bypass_lora", strength=strength, patches=lora_sd
+        )
 
 
 class BypassInjectionManager:

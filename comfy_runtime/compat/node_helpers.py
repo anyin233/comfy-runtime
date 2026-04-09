@@ -23,7 +23,11 @@ def conditioning_set_values(conditioning, values: dict, append=False):
         new_dict = dict(cond_dict)
         if append:
             for k, v in values.items():
-                if k in new_dict and isinstance(new_dict[k], list) and isinstance(v, list):
+                if (
+                    k in new_dict
+                    and isinstance(new_dict[k], list)
+                    and isinstance(v, list)
+                ):
                     new_dict[k] = new_dict[k] + v
                 elif k in new_dict and isinstance(new_dict[k], list):
                     new_dict[k] = new_dict[k] + [v]

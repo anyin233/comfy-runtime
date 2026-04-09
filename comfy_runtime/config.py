@@ -7,6 +7,7 @@ def _activate_vendor_bridge_if_available():
     any subsequent node loading picks up the real implementations."""
     try:
         from comfy_runtime.compat.comfy._vendor_bridge import activate_vendor_bridge
+
         activate_vendor_bridge()
     except Exception:
         pass  # Bridge not available or vendor code missing — compat stubs remain

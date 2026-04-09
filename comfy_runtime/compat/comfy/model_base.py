@@ -18,12 +18,14 @@ logger = logging.getLogger(__name__)
 # ModelType enum
 # ---------------------------------------------------------------------------
 
+
 class ModelType(enum.IntEnum):
     """Enumeration of supported diffusion model types.
 
     Maps each architecture to an integer for identification during
     checkpoint loading and model configuration.
     """
+
     EPS = 1
     V_PREDICTION = 2
     V_PREDICTION_EDM = 3
@@ -40,6 +42,7 @@ class ModelType(enum.IntEnum):
 # ---------------------------------------------------------------------------
 # BaseModel
 # ---------------------------------------------------------------------------
+
 
 class BaseModel:
     """Base class for all diffusion model wrappers.
@@ -59,8 +62,9 @@ class BaseModel:
 
     model_type = ModelType.EPS
 
-    def __init__(self, model_config=None, model_type=None, device=None,
-                 unet_model=None):
+    def __init__(
+        self, model_config=None, model_type=None, device=None, unet_model=None
+    ):
         """Initialize BaseModel.
 
         Args:
@@ -88,9 +92,17 @@ class BaseModel:
                 if isinstance(unet_cfg, dict):
                     self.adm_channels = unet_cfg.get("adm_in_channels", 0)
 
-    def apply_model(self, x, t, c_concat=None, c_crossattn=None,
-                    c_adm=None, control=None, transformer_options=None,
-                    **kwargs):
+    def apply_model(
+        self,
+        x,
+        t,
+        c_concat=None,
+        c_crossattn=None,
+        c_adm=None,
+        control=None,
+        transformer_options=None,
+        **kwargs,
+    ):
         """Run the diffusion model forward pass.
 
         Args:
@@ -154,8 +166,9 @@ class BaseModel:
             return elements * 4 * 4
         return 0
 
-    def state_dict_for_saving(self, clip_state_dict=None, vae_state_dict=None,
-                              clip_vision_state_dict=None):
+    def state_dict_for_saving(
+        self, clip_state_dict=None, vae_state_dict=None, clip_vision_state_dict=None
+    ):
         """Build a state dict for checkpoint saving.
 
         Args:
@@ -183,6 +196,7 @@ class BaseModel:
 # Architecture-specific model stubs
 # ---------------------------------------------------------------------------
 
+
 class SD15(BaseModel):
     """Stable Diffusion 1.5 model.
 
@@ -192,8 +206,9 @@ class SD15(BaseModel):
 
     model_type = ModelType.EPS
 
-    def __init__(self, model_config=None, model_type=None, device=None,
-                 unet_model=None):
+    def __init__(
+        self, model_config=None, model_type=None, device=None, unet_model=None
+    ):
         """Initialize SD 1.5 model.
 
         Args:
@@ -214,8 +229,9 @@ class SDXL(BaseModel):
 
     model_type = ModelType.EPS
 
-    def __init__(self, model_config=None, model_type=None, device=None,
-                 unet_model=None):
+    def __init__(
+        self, model_config=None, model_type=None, device=None, unet_model=None
+    ):
         """Initialize SDXL model.
 
         Args:
@@ -236,8 +252,9 @@ class SDXLRefiner(BaseModel):
 
     model_type = ModelType.EPS
 
-    def __init__(self, model_config=None, model_type=None, device=None,
-                 unet_model=None):
+    def __init__(
+        self, model_config=None, model_type=None, device=None, unet_model=None
+    ):
         """Initialize SDXL Refiner model.
 
         Args:
@@ -258,8 +275,9 @@ class SD3(BaseModel):
 
     model_type = ModelType.FLOW
 
-    def __init__(self, model_config=None, model_type=None, device=None,
-                 unet_model=None):
+    def __init__(
+        self, model_config=None, model_type=None, device=None, unet_model=None
+    ):
         """Initialize SD3 model.
 
         Args:
@@ -280,8 +298,9 @@ class SVD_img2vid(BaseModel):
 
     model_type = ModelType.V_PREDICTION
 
-    def __init__(self, model_config=None, model_type=None, device=None,
-                 unet_model=None):
+    def __init__(
+        self, model_config=None, model_type=None, device=None, unet_model=None
+    ):
         """Initialize SVD img2vid model.
 
         Args:
@@ -302,8 +321,9 @@ class SDXL_instructpix2pix(BaseModel):
 
     model_type = ModelType.EPS
 
-    def __init__(self, model_config=None, model_type=None, device=None,
-                 unet_model=None):
+    def __init__(
+        self, model_config=None, model_type=None, device=None, unet_model=None
+    ):
         """Initialize SDXL InstructPix2Pix model.
 
         Args:

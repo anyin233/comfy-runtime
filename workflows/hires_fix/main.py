@@ -53,30 +53,43 @@ def main():
     # Load checkpoint
     print(f"\n=== Loading checkpoint: {CHECKPOINT} ===")
     model, clip, vae = comfy_runtime.execute_node(
-        "CheckpointLoaderSimple", ckpt_name=CHECKPOINT,
+        "CheckpointLoaderSimple",
+        ckpt_name=CHECKPOINT,
     )
 
     # Encode prompts
     print("\n=== Encoding prompts ===")
     positive = comfy_runtime.execute_node(
-        "CLIPTextEncode", clip=clip, text=PROMPT,
+        "CLIPTextEncode",
+        clip=clip,
+        text=PROMPT,
     )[0]
     negative = comfy_runtime.execute_node(
-        "CLIPTextEncode", clip=clip, text=NEGATIVE_PROMPT,
+        "CLIPTextEncode",
+        clip=clip,
+        text=NEGATIVE_PROMPT,
     )[0]
 
     # === Pass 1: Low-resolution generation ===
     print(f"\n=== Pass 1: Generate {PASS1_WIDTH}x{PASS1_HEIGHT} ===")
     latent = comfy_runtime.execute_node(
         "EmptyLatentImage",
-        width=PASS1_WIDTH, height=PASS1_HEIGHT, batch_size=1,
+        width=PASS1_WIDTH,
+        height=PASS1_HEIGHT,
+        batch_size=1,
     )[0]
 
     sampled_lr = comfy_runtime.execute_node(
         "KSampler",
-        model=model, positive=positive, negative=negative,
-        latent_image=latent, seed=SEED, steps=PASS1_STEPS,
-        cfg=PASS1_CFG, sampler_name="euler", scheduler="normal",
+        model=model,
+        positive=positive,
+        negative=negative,
+        latent_image=latent,
+        seed=SEED,
+        steps=PASS1_STEPS,
+        cfg=PASS1_CFG,
+        sampler_name="euler",
+        scheduler="normal",
         denoise=1.0,
     )[0]
     print("  Pass 1 complete.")
@@ -89,17 +102,26 @@ def main():
         "LatentUpscale",
         samples=sampled_lr,
         upscale_method="nearest-exact",
-        width=target_w, height=target_h,
+        width=target_w,
+        height=target_h,
         crop="disabled",
     )[0]
 
     # === Pass 2: High-resolution refinement ===
-    print(f"\n=== Pass 2: Refine at {target_w}x{target_h} (denoise={PASS2_DENOISE}) ===")
+    print(
+        f"\n=== Pass 2: Refine at {target_w}x{target_h} (denoise={PASS2_DENOISE}) ==="
+    )
     sampled_hr = comfy_runtime.execute_node(
         "KSampler",
-        model=model, positive=positive, negative=negative,
-        latent_image=upscaled_latent, seed=SEED, steps=PASS2_STEPS,
-        cfg=PASS2_CFG, sampler_name="euler", scheduler="normal",
+        model=model,
+        positive=positive,
+        negative=negative,
+        latent_image=upscaled_latent,
+        seed=SEED,
+        steps=PASS2_STEPS,
+        cfg=PASS2_CFG,
+        sampler_name="euler",
+        scheduler="normal",
         denoise=PASS2_DENOISE,
     )[0]
     print("  Pass 2 complete.")
@@ -107,7 +129,9 @@ def main():
     # Decode and save
     print("\n=== Decoding VAE ===")
     images = comfy_runtime.execute_node(
-        "VAEDecode", samples=sampled_hr, vae=vae,
+        "VAEDecode",
+        samples=sampled_hr,
+        vae=vae,
     )[0]
     if hasattr(images, "detach"):
         images = images.detach()
@@ -115,7 +139,9 @@ def main():
 
     print("\n=== Saving image ===")
     comfy_runtime.execute_node(
-        "SaveImage", images=images, filename_prefix="HiresFix",
+        "SaveImage",
+        images=images,
+        filename_prefix="HiresFix",
     )
     print(f"\nDone! Output saved to: {OUTPUT_DIR}/")
 

@@ -106,7 +106,9 @@ def _ensure_vendor_imports():
             comfy_ldm = sys.modules.get("comfy.ldm")
             comfy_ldm_modules = sys.modules.get("comfy.ldm.modules")
             comfy_ldm_diffmod = sys.modules.get("comfy.ldm.modules.diffusionmodules")
-            comfy_ldm_mmdit = sys.modules.get("comfy.ldm.modules.diffusionmodules.mmdit")
+            comfy_ldm_mmdit = sys.modules.get(
+                "comfy.ldm.modules.diffusionmodules.mmdit"
+            )
             if comfy_ldm and comfy_ldm_modules:
                 comfy_ldm.modules = comfy_ldm_modules
             if comfy_ldm_modules and comfy_ldm_diffmod:
@@ -128,8 +130,13 @@ def _ensure_vendor_imports():
             except Exception:
                 pass
 
-        for mod_name in ("folder_paths", "execution", "protocol", "node_helpers",
-                         "comfyui_version"):
+        for mod_name in (
+            "folder_paths",
+            "execution",
+            "protocol",
+            "node_helpers",
+            "comfyui_version",
+        ):
             vendor_name = f"comfy_runtime._vendor.{mod_name}"
             try:
                 vendor_mod = importlib.import_module(vendor_name)
@@ -137,8 +144,12 @@ def _ensure_vendor_imports():
                 if mod_name == "folder_paths":
                     compat_fp = sys.modules.get(mod_name)
                     if compat_fp is not None:
-                        for attr in ("output_directory", "input_directory", "temp_directory",
-                                     "folder_names_and_paths"):
+                        for attr in (
+                            "output_directory",
+                            "input_directory",
+                            "temp_directory",
+                            "folder_names_and_paths",
+                        ):
                             val = getattr(compat_fp, attr, None)
                             if val is not None:
                                 setattr(vendor_mod, attr, val)
@@ -152,8 +163,15 @@ def _ensure_vendor_imports():
         if comfyui_root is None:
             # Try common locations
             for candidate in [
-                os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-                    os.path.dirname(os.path.abspath(__file__))))), "..", "ComfyUI"),
+                os.path.join(
+                    os.path.dirname(
+                        os.path.dirname(
+                            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                        )
+                    ),
+                    "..",
+                    "ComfyUI",
+                ),
                 "/home/yanweiye/Project/ComfyUI",
             ]:
                 if os.path.isdir(os.path.join(candidate, "comfy_extras")):
@@ -175,6 +193,7 @@ def _ensure_vendor_imports():
     except Exception as e:
         logger.warning(f"Failed to initialize vendor bridge: {e}")
         import traceback
+
         traceback.print_exc()
 
 
@@ -197,8 +216,13 @@ def _vendor_import(dotted_name):
     return importlib.import_module(f"comfy_runtime._vendor.{dotted_name}")
 
 
-def load_checkpoint_guess_config(ckpt_path, output_vae=True, output_clip=True,
-                                  embedding_directory=None, output_clipvision=False):
+def load_checkpoint_guess_config(
+    ckpt_path,
+    output_vae=True,
+    output_clip=True,
+    embedding_directory=None,
+    output_clipvision=False,
+):
     """Load a checkpoint file and return (model, clip, vae, ...)."""
     vendor_sd = _vendor_import("comfy.sd")
     return vendor_sd.load_checkpoint_guess_config(
@@ -251,9 +275,22 @@ def encode_clip_text(clip, text):
     return clip.encode_from_tokens_scheduled(tokens)
 
 
-def ksampler(model, seed, steps, cfg, sampler_name, scheduler, positive,
-             negative, latent_image, denoise=1.0, disable_noise=False,
-             start_step=None, last_step=None, force_full_denoise=False):
+def ksampler(
+    model,
+    seed,
+    steps,
+    cfg,
+    sampler_name,
+    scheduler,
+    positive,
+    negative,
+    latent_image,
+    denoise=1.0,
+    disable_noise=False,
+    start_step=None,
+    last_step=None,
+    force_full_denoise=False,
+):
     """Run the KSampler diffusion sampling loop.
 
     Uses vendored comfy.sample.sample() directly.
@@ -264,12 +301,17 @@ def ksampler(model, seed, steps, cfg, sampler_name, scheduler, positive,
 
     latent = latent_image
     latent_samples = latent["samples"]
-    latent_samples = comfy.sample.fix_empty_latent_channels(model, latent_samples,
-                                                             latent.get("downscale_ratio_spacial", None))
+    latent_samples = comfy.sample.fix_empty_latent_channels(
+        model, latent_samples, latent.get("downscale_ratio_spacial", None)
+    )
 
     if disable_noise:
-        noise = torch.zeros(latent_samples.size(), dtype=latent_samples.dtype,
-                            layout=latent_samples.layout, device="cpu")
+        noise = torch.zeros(
+            latent_samples.size(),
+            dtype=latent_samples.dtype,
+            layout=latent_samples.layout,
+            device="cpu",
+        )
     else:
         batch_inds = latent.get("batch_index", None)
         noise = comfy.sample.prepare_noise(latent_samples, seed, batch_inds)
@@ -278,13 +320,24 @@ def ksampler(model, seed, steps, cfg, sampler_name, scheduler, positive,
 
     disable_pbar = not comfy.utils.PROGRESS_BAR_ENABLED
     samples = comfy.sample.sample(
-        model, noise, steps, cfg, sampler_name, scheduler,
-        positive, negative, latent_samples,
-        denoise=denoise, disable_noise=disable_noise,
-        start_step=start_step, last_step=last_step,
+        model,
+        noise,
+        steps,
+        cfg,
+        sampler_name,
+        scheduler,
+        positive,
+        negative,
+        latent_samples,
+        denoise=denoise,
+        disable_noise=disable_noise,
+        start_step=start_step,
+        last_step=last_step,
         force_full_denoise=force_full_denoise,
-        noise_mask=noise_mask, callback=None,
-        disable_pbar=disable_pbar, seed=seed,
+        noise_mask=noise_mask,
+        callback=None,
+        disable_pbar=disable_pbar,
+        seed=seed,
     )
 
     out = latent.copy()

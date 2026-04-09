@@ -17,8 +17,10 @@ logger = logging.getLogger(__name__)
 # CLIPType enum
 # ---------------------------------------------------------------------------
 
+
 class CLIPType(enum.Enum):
     """Enumeration of supported CLIP text encoder architectures."""
+
     SD1 = 1
     SD2 = 2
     SDXL = 3
@@ -37,6 +39,7 @@ class CLIPType(enum.Enum):
 # CLIP wrapper
 # ---------------------------------------------------------------------------
 
+
 class CLIP:
     """Wraps a text encoder model with tokenization and encoding methods.
 
@@ -53,8 +56,14 @@ class CLIP:
         offload_device: Device for offloading.
     """
 
-    def __init__(self, clip_model=None, tokenizer=None, load_device=None,
-                 offload_device=None, patcher=None):
+    def __init__(
+        self,
+        clip_model=None,
+        tokenizer=None,
+        load_device=None,
+        offload_device=None,
+        patcher=None,
+    ):
         """Initialize CLIP wrapper.
 
         Args:
@@ -106,8 +115,9 @@ class CLIP:
             "CLIP.tokenize is a stub. Tokenization will be implemented in Phase 3."
         )
 
-    def encode_from_tokens(self, tokens, return_pooled: bool = False,
-                           return_dict: bool = False):
+    def encode_from_tokens(
+        self, tokens, return_pooled: bool = False, return_dict: bool = False
+    ):
         """Encode tokens into conditioning embeddings.
 
         Args:
@@ -172,6 +182,7 @@ class CLIP:
 # VAE wrapper
 # ---------------------------------------------------------------------------
 
+
 class VAE:
     """Wraps a VAE model for encoding images to latents and decoding back.
 
@@ -227,8 +238,13 @@ class VAE:
             "VAE.encode is a stub. Encoding will be implemented in Phase 3."
         )
 
-    def decode_tiled(self, latent: torch.Tensor, tile_x: int = 64,
-                     tile_y: int = 64, overlap: int = 16) -> torch.Tensor:
+    def decode_tiled(
+        self,
+        latent: torch.Tensor,
+        tile_x: int = 64,
+        tile_y: int = 64,
+        overlap: int = 16,
+    ) -> torch.Tensor:
         """Decode latent using tiled processing for large images.
 
         Args:
@@ -241,12 +257,15 @@ class VAE:
             Decoded image tensor.
         """
         # TODO(Phase3): Implement tiled decoding.
-        raise NotImplementedError(
-            "VAE.decode_tiled is a stub."
-        )
+        raise NotImplementedError("VAE.decode_tiled is a stub.")
 
-    def encode_tiled(self, image: torch.Tensor, tile_x: int = 512,
-                     tile_y: int = 512, overlap: int = 64) -> torch.Tensor:
+    def encode_tiled(
+        self,
+        image: torch.Tensor,
+        tile_x: int = 512,
+        tile_y: int = 512,
+        overlap: int = 64,
+    ) -> torch.Tensor:
         """Encode image using tiled processing.
 
         Args:
@@ -259,9 +278,7 @@ class VAE:
             Latent tensor.
         """
         # TODO(Phase3): Implement tiled encoding.
-        raise NotImplementedError(
-            "VAE.encode_tiled is a stub."
-        )
+        raise NotImplementedError("VAE.encode_tiled is a stub.")
 
     def get_sd(self) -> Dict[str, torch.Tensor]:
         """Get the state dict.
@@ -277,6 +294,7 @@ class VAE:
 # ---------------------------------------------------------------------------
 # StyleModel
 # ---------------------------------------------------------------------------
+
 
 class StyleModel:
     """Style model wrapper for style transfer conditioning.
@@ -303,21 +321,23 @@ class StyleModel:
             Style conditioning tensor.
         """
         # TODO(Phase3): Implement style conditioning.
-        raise NotImplementedError(
-            "StyleModel.get_cond is a stub."
-        )
+        raise NotImplementedError("StyleModel.get_cond is a stub.")
 
 
 # ---------------------------------------------------------------------------
 # Loading functions
 # ---------------------------------------------------------------------------
 
-def load_checkpoint_guess_config(ckpt_path: str, output_vae: bool = True,
-                                 output_clip: bool = True,
-                                 output_clipvision: bool = False,
-                                 embedding_directory: Optional[str] = None,
-                                 output_model: bool = True,
-                                 model_options: Optional[Dict] = None):
+
+def load_checkpoint_guess_config(
+    ckpt_path: str,
+    output_vae: bool = True,
+    output_clip: bool = True,
+    output_clipvision: bool = False,
+    embedding_directory: Optional[str] = None,
+    output_model: bool = True,
+    model_options: Optional[Dict] = None,
+):
     """Load a checkpoint and guess its model configuration.
 
     Args:
@@ -342,8 +362,11 @@ def load_checkpoint_guess_config(ckpt_path: str, output_vae: bool = True,
     )
 
 
-def load_clip(clip_path: str, clip_type: Optional[CLIPType] = None,
-              model_options: Optional[Dict] = None):
+def load_clip(
+    clip_path: str,
+    clip_type: Optional[CLIPType] = None,
+    model_options: Optional[Dict] = None,
+):
     """Load a standalone CLIP model.
 
     Args:
@@ -363,8 +386,9 @@ def load_clip(clip_path: str, clip_type: Optional[CLIPType] = None,
     )
 
 
-def load_lora_for_models(model, clip, lora, strength_model: float,
-                         strength_clip: float):
+def load_lora_for_models(
+    model, clip, lora, strength_model: float, strength_clip: float
+):
     """Apply a LoRA to model and clip.
 
     Args:
@@ -386,8 +410,9 @@ def load_lora_for_models(model, clip, lora, strength_model: float,
     )
 
 
-def load_bypass_lora_for_models(model, clip, lora, strength_model: float,
-                                strength_clip: float, **kwargs):
+def load_bypass_lora_for_models(
+    model, clip, lora, strength_model: float, strength_clip: float, **kwargs
+):
     """Apply a bypass LoRA to model and clip.
 
     Args:
@@ -411,9 +436,15 @@ def load_bypass_lora_for_models(model, clip, lora, strength_model: float,
     )
 
 
-def save_checkpoint(output_path: str, model=None, clip=None, vae=None,
-                    clip_vision=None, metadata: Optional[Dict] = None,
-                    **kwargs):
+def save_checkpoint(
+    output_path: str,
+    model=None,
+    clip=None,
+    vae=None,
+    clip_vision=None,
+    metadata: Optional[Dict] = None,
+    **kwargs,
+):
     """Save a checkpoint to disk.
 
     Args:

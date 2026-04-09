@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 # CONDRegular
 # ---------------------------------------------------------------------------
 
+
 class CONDRegular:
     """Regular conditioning wrapper for non-attention conditioning.
 
@@ -97,6 +98,7 @@ class CONDRegular:
 # CONDCrossAttn
 # ---------------------------------------------------------------------------
 
+
 class CONDCrossAttn:
     """Cross-attention conditioning wrapper.
 
@@ -177,6 +179,7 @@ class CONDCrossAttn:
 # CONDNoiseShape
 # ---------------------------------------------------------------------------
 
+
 class CONDNoiseShape:
     """Noise shape conditioning wrapper.
 
@@ -231,7 +234,9 @@ class CONDNoiseShape:
             New CONDNoiseShape with combined data.
         """
         if isinstance(self.cond, torch.Tensor):
-            conds = [self.cond] + [o.cond for o in others if isinstance(o.cond, torch.Tensor)]
+            conds = [self.cond] + [
+                o.cond for o in others if isinstance(o.cond, torch.Tensor)
+            ]
             return CONDNoiseShape(torch.cat(conds, dim=0))
         return self
 

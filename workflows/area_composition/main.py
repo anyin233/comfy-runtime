@@ -25,9 +25,15 @@ OUTPUT_DIR = os.path.join(SCRIPT_DIR, "output")
 CHECKPOINT = "v1-5-pruned-emaonly.safetensors"
 
 # Scene composition: left side is day, right side is night
-BACKGROUND_PROMPT = "a beautiful landscape, wide panoramic view, highly detailed, masterpiece"
-LEFT_PROMPT = "sunny daytime scene, bright blue sky, green meadow, flowers, warm lighting"
-RIGHT_PROMPT = "nighttime scene, dark starry sky, moonlight, mysterious forest, cool blue tones"
+BACKGROUND_PROMPT = (
+    "a beautiful landscape, wide panoramic view, highly detailed, masterpiece"
+)
+LEFT_PROMPT = (
+    "sunny daytime scene, bright blue sky, green meadow, flowers, warm lighting"
+)
+RIGHT_PROMPT = (
+    "nighttime scene, dark starry sky, moonlight, mysterious forest, cool blue tones"
+)
 NEGATIVE_PROMPT = "blurry, low quality, distorted, watermark"
 
 WIDTH = 768
@@ -49,28 +55,37 @@ def main():
     # Load checkpoint
     print(f"\n=== Loading checkpoint ===")
     model, clip, vae = comfy_runtime.execute_node(
-        "CheckpointLoaderSimple", ckpt_name=CHECKPOINT,
+        "CheckpointLoaderSimple",
+        ckpt_name=CHECKPOINT,
     )
 
     # Encode background prompt (full image)
     print("\n=== Encoding prompts ===")
     bg_cond = comfy_runtime.execute_node(
-        "CLIPTextEncode", clip=clip, text=BACKGROUND_PROMPT,
+        "CLIPTextEncode",
+        clip=clip,
+        text=BACKGROUND_PROMPT,
     )[0]
 
     # Encode left area prompt
     left_cond = comfy_runtime.execute_node(
-        "CLIPTextEncode", clip=clip, text=LEFT_PROMPT,
+        "CLIPTextEncode",
+        clip=clip,
+        text=LEFT_PROMPT,
     )[0]
 
     # Encode right area prompt
     right_cond = comfy_runtime.execute_node(
-        "CLIPTextEncode", clip=clip, text=RIGHT_PROMPT,
+        "CLIPTextEncode",
+        clip=clip,
+        text=RIGHT_PROMPT,
     )[0]
 
     # Encode negative
     negative = comfy_runtime.execute_node(
-        "CLIPTextEncode", clip=clip, text=NEGATIVE_PROMPT,
+        "CLIPTextEncode",
+        clip=clip,
+        text=NEGATIVE_PROMPT,
     )[0]
 
     # Set areas: left half for daytime scene
@@ -81,7 +96,8 @@ def main():
         conditioning=left_cond,
         width=WIDTH // 2 + 64,  # slight overlap for blending
         height=HEIGHT,
-        x=0, y=0,
+        x=0,
+        y=0,
         strength=1.0,
     )[0]
 
@@ -91,7 +107,8 @@ def main():
         conditioning=right_cond,
         width=WIDTH // 2 + 64,
         height=HEIGHT,
-        x=WIDTH // 2 - 64, y=0,
+        x=WIDTH // 2 - 64,
+        y=0,
         strength=1.0,
     )[0]
 
@@ -111,28 +128,41 @@ def main():
     # Create latent and sample
     print(f"\n=== Generating {WIDTH}x{HEIGHT} composed image ===")
     latent = comfy_runtime.execute_node(
-        "EmptyLatentImage", width=WIDTH, height=HEIGHT, batch_size=1,
+        "EmptyLatentImage",
+        width=WIDTH,
+        height=HEIGHT,
+        batch_size=1,
     )[0]
 
     sampled = comfy_runtime.execute_node(
         "KSampler",
-        model=model, positive=combined, negative=negative,
-        latent_image=latent, seed=SEED, steps=STEPS,
-        cfg=CFG, sampler_name="euler", scheduler="normal",
+        model=model,
+        positive=combined,
+        negative=negative,
+        latent_image=latent,
+        seed=SEED,
+        steps=STEPS,
+        cfg=CFG,
+        sampler_name="euler",
+        scheduler="normal",
         denoise=1.0,
     )[0]
 
     # Decode and save
     print("\n=== Decoding and saving ===")
     images = comfy_runtime.execute_node(
-        "VAEDecode", samples=sampled, vae=vae,
+        "VAEDecode",
+        samples=sampled,
+        vae=vae,
     )[0]
     if hasattr(images, "detach"):
         images = images.detach()
     print(f"  Output shape: {images.shape}")
 
     comfy_runtime.execute_node(
-        "SaveImage", images=images, filename_prefix="AreaCompose",
+        "SaveImage",
+        images=images,
+        filename_prefix="AreaCompose",
     )
     print(f"\nDone! Output saved to: {OUTPUT_DIR}/")
 

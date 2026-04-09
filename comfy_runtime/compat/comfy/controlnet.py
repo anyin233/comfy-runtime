@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 # ControlBase
 # ---------------------------------------------------------------------------
 
+
 class ControlBase:
     """Base class for all ControlNet-style conditioning models.
 
@@ -52,9 +53,13 @@ class ControlBase:
         self.compression_ratio = 8
         self.upscale_algorithm = "nearest-exact"
 
-    def set_cond_hint(self, cond_hint, strength: float = 1.0,
-                      timestep_percent_range: tuple = (0.0, 1.0),
-                      vae=None):
+    def set_cond_hint(
+        self,
+        cond_hint,
+        strength: float = 1.0,
+        timestep_percent_range: tuple = (0.0, 1.0),
+        vae=None,
+    ):
         """Set the conditioning hint image and parameters.
 
         Args:
@@ -143,6 +148,7 @@ class ControlBase:
 # ControlNet
 # ---------------------------------------------------------------------------
 
+
 class ControlNet(ControlBase):
     """Standard ControlNet model.
 
@@ -154,8 +160,9 @@ class ControlNet(ControlBase):
         control_model_wrapped: Wrapped version for inference.
     """
 
-    def __init__(self, control_model=None, device=None, load_device=None,
-                 offload_device=None):
+    def __init__(
+        self, control_model=None, device=None, load_device=None, offload_device=None
+    ):
         """Initialize ControlNet.
 
         Args:
@@ -226,6 +233,7 @@ class ControlNet(ControlBase):
 # Loading
 # ---------------------------------------------------------------------------
 
+
 def load_controlnet(ckpt_path: str, model=None):
     """Load a ControlNet model from a checkpoint.
 
@@ -241,6 +249,5 @@ def load_controlnet(ckpt_path: str, model=None):
     """
     # TODO(Phase3): Implement ControlNet checkpoint loading.
     raise NotImplementedError(
-        "load_controlnet is a stub. "
-        "ControlNet loading will be implemented in Phase 3."
+        "load_controlnet is a stub. ControlNet loading will be implemented in Phase 3."
     )

@@ -134,7 +134,8 @@ def _load_from_directory(dirpath: str) -> list[str]:
             sys.path.insert(0, parent_dir)
 
         spec = importlib.util.spec_from_file_location(
-            module_name, init_path,
+            module_name,
+            init_path,
             submodule_search_locations=[dirpath],
         )
         if spec is not None and spec.loader is not None:

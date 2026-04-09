@@ -77,6 +77,7 @@ SCHEDULER_NAMES: List[str] = [
 # Sigma schedule computation
 # ---------------------------------------------------------------------------
 
+
 def _linear_sigmas(steps: int, sigma_min: float, sigma_max: float) -> torch.Tensor:
     """Compute linearly spaced sigmas from sigma_max to sigma_min.
 
@@ -93,7 +94,9 @@ def _linear_sigmas(steps: int, sigma_min: float, sigma_max: float) -> torch.Tens
     return torch.cat([sigmas, sigmas.new_zeros([1])])
 
 
-def _karras_sigmas(steps: int, sigma_min: float, sigma_max: float, rho: float = 7.0) -> torch.Tensor:
+def _karras_sigmas(
+    steps: int, sigma_min: float, sigma_max: float, rho: float = 7.0
+) -> torch.Tensor:
     """Compute Karras et al. sigma schedule.
 
     Uses the formula:
@@ -181,6 +184,7 @@ def calculate_sigmas(model_sampling, scheduler_name: str, steps: int) -> torch.T
 # Sampler object factories
 # ---------------------------------------------------------------------------
 
+
 def sampler_object(name: str) -> Callable:
     """Return a callable sampler for the given name.
 
@@ -217,8 +221,12 @@ class KSAMPLER:
         inpaint_options: Inpaint-specific options dict.
     """
 
-    def __init__(self, sampler_function: Callable, extra_options: Dict = None,
-                 inpaint_options: Dict = None):
+    def __init__(
+        self,
+        sampler_function: Callable,
+        extra_options: Dict = None,
+        inpaint_options: Dict = None,
+    ):
         """Initialize the KSAMPLER wrapper.
 
         Args:
@@ -246,8 +254,9 @@ class KSAMPLER:
         return self.sampler_function(model, noise, sigmas, **kwargs)
 
 
-def ksampler(sampler_name: str, extra_options: Dict = None,
-             inpaint_options: Dict = None) -> KSAMPLER:
+def ksampler(
+    sampler_name: str, extra_options: Dict = None, inpaint_options: Dict = None
+) -> KSAMPLER:
     """Create a KSAMPLER from a sampler name.
 
     Args:
@@ -269,14 +278,24 @@ def ksampler(sampler_name: str, extra_options: Dict = None,
 # Sampler base class
 # ---------------------------------------------------------------------------
 
+
 class Sampler:
     """Base sampler class that nodes can subclass.
 
     Provides the interface contract for custom sampler implementations.
     """
 
-    def sample(self, model_wrap, sigmas, extra_args, callback, noise, latent_image=None,
-               denoise_mask=None, disable_pbar=False):
+    def sample(
+        self,
+        model_wrap,
+        sigmas,
+        extra_args,
+        callback,
+        noise,
+        latent_image=None,
+        denoise_mask=None,
+        disable_pbar=False,
+    ):
         """Run the sampling loop.
 
         Args:
@@ -306,7 +325,9 @@ class Sampler:
             True if the first sigma is at maximum noise level.
         """
         max_sigma = float(sigmas.max())
-        if hasattr(model_wrap, "inner_model") and hasattr(model_wrap.inner_model, "model_sampling"):
+        if hasattr(model_wrap, "inner_model") and hasattr(
+            model_wrap.inner_model, "model_sampling"
+        ):
             model_sigma_max = float(model_wrap.inner_model.model_sampling.sigma_max)
             return math.isclose(max_sigma, model_sigma_max, rel_tol=0.05)
         return True
@@ -315,6 +336,7 @@ class Sampler:
 # ---------------------------------------------------------------------------
 # KSampler class — high-level sampling interface
 # ---------------------------------------------------------------------------
+
 
 class KSampler:
     """High-level sampler wrapping model, steps, device, sampler, scheduler, denoise.
@@ -334,8 +356,16 @@ class KSampler:
     SAMPLERS = SAMPLER_NAMES
     SCHEDULERS = SCHEDULER_NAMES
 
-    def __init__(self, model, steps: int, device, sampler: str, scheduler: str,
-                 denoise: float = 1.0, model_options: Dict = None):
+    def __init__(
+        self,
+        model,
+        steps: int,
+        device,
+        sampler: str,
+        scheduler: str,
+        denoise: float = 1.0,
+        model_options: Dict = None,
+    ):
         """Initialize KSampler.
 
         Args:
@@ -372,23 +402,43 @@ class KSampler:
                 model_sampling = self.model.get_model_object("model_sampling")
             except Exception:
                 pass
-        if model_sampling is None and hasattr(self.model, "model") and hasattr(self.model.model, "model_sampling"):
+        if (
+            model_sampling is None
+            and hasattr(self.model, "model")
+            and hasattr(self.model.model, "model_sampling")
+        ):
             model_sampling = self.model.model.model_sampling
 
         # Create a simple fallback if no model_sampling available
         if model_sampling is None:
-            model_sampling = type("FallbackSampling", (), {
-                "sigma_max": 14.6146,
-                "sigma_min": 0.0292,
-                "sigmas": None,
-            })()
+            model_sampling = type(
+                "FallbackSampling",
+                (),
+                {
+                    "sigma_max": 14.6146,
+                    "sigma_min": 0.0292,
+                    "sigmas": None,
+                },
+            )()
 
         return calculate_sigmas(model_sampling, self.scheduler, steps)
 
-    def sample(self, noise, positive, negative, cfg, latent_image=None,
-               start_step=None, last_step=None, force_full_denoise=False,
-               denoise_mask=None, sigmas=None, callback=None, disable_pbar=False,
-               seed=None):
+    def sample(
+        self,
+        noise,
+        positive,
+        negative,
+        cfg,
+        latent_image=None,
+        start_step=None,
+        last_step=None,
+        force_full_denoise=False,
+        denoise_mask=None,
+        sigmas=None,
+        callback=None,
+        disable_pbar=False,
+        seed=None,
+    ):
         """Run the full sampling pipeline.
 
         Args:
@@ -419,6 +469,7 @@ class KSampler:
 # CFGGuider — classifier-free guidance wrapper
 # ---------------------------------------------------------------------------
 
+
 class CFGGuider:
     """Wraps a model with positive/negative conditioning and CFG scale.
 
@@ -441,7 +492,11 @@ class CFGGuider:
         self.model_patcher = model_patcher
         self.conds = {}
         self.cfg = 1.0
-        self.model_options = model_patcher.model_options.copy() if model_patcher and hasattr(model_patcher, "model_options") else {}
+        self.model_options = (
+            model_patcher.model_options.copy()
+            if model_patcher and hasattr(model_patcher, "model_options")
+            else {}
+        )
         self.inner_model = None
 
     def set_conds(self, positive=None, negative=None, **kwargs):
@@ -483,8 +538,17 @@ class CFGGuider:
             "CFGGuider.predict_noise is a stub. Will be implemented in Phase 3."
         )
 
-    def sample(self, noise, latent_image, sampler, sigmas, denoise_mask=None,
-               callback=None, disable_pbar=False, seed=None):
+    def sample(
+        self,
+        noise,
+        latent_image,
+        sampler,
+        sigmas,
+        denoise_mask=None,
+        callback=None,
+        disable_pbar=False,
+        seed=None,
+    ):
         """Run guided sampling.
 
         Args:
@@ -505,8 +569,17 @@ class CFGGuider:
             "CFGGuider.sample is a stub. Will be implemented in Phase 3."
         )
 
-    def outer_sample(self, noise, latent_image, sampler, sigmas, denoise_mask=None,
-                     callback=None, disable_pbar=False, seed=None):
+    def outer_sample(
+        self,
+        noise,
+        latent_image,
+        sampler,
+        sigmas,
+        denoise_mask=None,
+        callback=None,
+        disable_pbar=False,
+        seed=None,
+    ):
         """Outer sampling entry point (wraps sample with model load/unload).
 
         Args:
@@ -523,14 +596,22 @@ class CFGGuider:
             Denoised latent tensor.
         """
         # TODO(Phase3): Implement with model loading/unloading.
-        return self.sample(noise, latent_image, sampler, sigmas,
-                           denoise_mask=denoise_mask, callback=callback,
-                           disable_pbar=disable_pbar, seed=seed)
+        return self.sample(
+            noise,
+            latent_image,
+            sampler,
+            sigmas,
+            denoise_mask=denoise_mask,
+            callback=callback,
+            disable_pbar=disable_pbar,
+            seed=seed,
+        )
 
 
 # ---------------------------------------------------------------------------
 # Helper functions
 # ---------------------------------------------------------------------------
+
 
 def cfg_function(args: Dict[str, Any]) -> torch.Tensor:
     """Apply classifier-free guidance to model predictions.
@@ -551,7 +632,9 @@ def cfg_function(args: Dict[str, Any]) -> torch.Tensor:
 
     if cond is None or uncond is None:
         # TODO(Phase3): Handle missing cond/uncond gracefully.
-        raise NotImplementedError("cfg_function requires both cond and uncond predictions.")
+        raise NotImplementedError(
+            "cfg_function requires both cond and uncond predictions."
+        )
 
     return uncond + cond_scale * (cond - uncond)
 

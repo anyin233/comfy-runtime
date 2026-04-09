@@ -26,9 +26,7 @@ def attention(q, k, v, heads, mask=None):
     k = k.view(b, -1, heads, head_dim).transpose(1, 2)
     v = v.view(b, -1, heads, head_dim).transpose(1, 2)
 
-    out = torch.nn.functional.scaled_dot_product_attention(
-        q, k, v, attn_mask=mask
-    )
+    out = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=mask)
 
     out = out.transpose(1, 2).contiguous().view(b, seq_len, dim)
     return out

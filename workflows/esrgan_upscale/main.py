@@ -41,32 +41,40 @@ def main():
 
     # Load extra nodes for upscaling
     print("\n=== Loading upscale nodes ===")
-    comfy_runtime.load_nodes_from_path(os.path.join(NODES_DIR, "nodes_upscale_model.py"))
+    comfy_runtime.load_nodes_from_path(
+        os.path.join(NODES_DIR, "nodes_upscale_model.py")
+    )
 
     # Step 1: Load input image
     print(f"\n=== Loading input image: {INPUT_IMAGE} ===")
     image, mask = comfy_runtime.execute_node(
-        "LoadImage", image=INPUT_IMAGE,
+        "LoadImage",
+        image=INPUT_IMAGE,
     )
     print(f"  Input shape: {image.shape}")
 
     # Step 2: Load upscale model
     print(f"\n=== Loading upscale model: {UPSCALE_MODEL} ===")
     upscale_model = comfy_runtime.execute_node(
-        "UpscaleModelLoader", model_name=UPSCALE_MODEL,
+        "UpscaleModelLoader",
+        model_name=UPSCALE_MODEL,
     )[0]
 
     # Step 3: Upscale image
     print("\n=== Upscaling image (4x) ===")
     upscaled = comfy_runtime.execute_node(
-        "ImageUpscaleWithModel", upscale_model=upscale_model, image=image,
+        "ImageUpscaleWithModel",
+        upscale_model=upscale_model,
+        image=image,
     )[0]
     print(f"  Output shape: {upscaled.shape}")
 
     # Step 4: Save result
     print("\n=== Saving image ===")
     comfy_runtime.execute_node(
-        "SaveImage", images=upscaled, filename_prefix="ESRGAN_4x",
+        "SaveImage",
+        images=upscaled,
+        filename_prefix="ESRGAN_4x",
     )
     print(f"\nDone! Output saved to: {OUTPUT_DIR}/")
 

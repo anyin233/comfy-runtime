@@ -50,6 +50,8 @@ def prepare_callback(model, steps, x0_output_dict=None):
     Returns:
         A no-op callback function.
     """
+
     def callback(step, x0, x, total_steps):
         pass
+
     return callback
