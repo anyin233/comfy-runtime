@@ -1,0 +1,13 @@
+[project]
+name = "esrgan-upscale"
+version = "0.1.0"
+description = "ESRGAN Image Upscaling workflow using comfy_runtime"
+requires-python = ">=3.10"
+dependencies = [
+    "comfy-runtime",
+    "huggingface-hub",
+    "spandrel",
+]
+
+[tool.uv.sources]
+comfy-runtime = { path = "/home/yanweiye/Project/comfy_runtime", editable = true }

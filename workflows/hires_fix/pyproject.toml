@@ -1,0 +1,11 @@
+[project]
+name = "hires-fix"
+version = "0.1.0"
+description = "2-Pass Hires Fix workflow using comfy_runtime"
+requires-python = ">=3.10"
+dependencies = [
+    "comfy-runtime",
+]
+
+[tool.uv.sources]
+comfy-runtime = { path = "/home/yanweiye/Project/comfy_runtime", editable = true }

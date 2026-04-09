@@ -1,0 +1,11 @@
+[project]
+name = "img2img"
+version = "0.1.0"
+description = "Image-to-Image style transfer workflow using comfy_runtime"
+requires-python = ">=3.10"
+dependencies = [
+    "comfy-runtime",
+]
+
+[tool.uv.sources]
+comfy-runtime = { path = "/home/yanweiye/Project/comfy_runtime", editable = true }
