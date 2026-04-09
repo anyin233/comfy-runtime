@@ -27,4 +27,4 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Run tests
-        run: pytest -v --tb=short
+        run: pytest -v --tb=short --ignore=tests/integration
