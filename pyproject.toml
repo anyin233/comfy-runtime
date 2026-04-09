@@ -7,7 +7,7 @@ name = "comfy-runtime"
 version = "0.1.0"
 description = "Minimal ComfyUI runtime for deploying custom nodes as microservices"
 readme = "README.md"
-license = "GPL-3.0-only"
+license = "MIT"
 requires-python = ">=3.10"
 authors = [{name = "ComfyUI Community"}]
 keywords = ["comfyui", "runtime", "nodes", "microservice", "inference"]

@@ -90,4 +90,4 @@ See [`workflows/`](workflows/) for complete runnable examples:
 
 ## License
 
-GPL-3.0
+MIT
