@@ -495,25 +495,136 @@ class ModelPatcher:
             self.current_device = device_to
         self.is_patched = False
 
+    # ------------------------------------------------------------------
+    # Partial loading / unloading — the lowvram primitive.
+    #
+    # ComfyUI's lowvram strategy is to fit as much of the model onto the
+    # compute device as will actually fit, and leave the rest on the
+    # offload device.  These three methods implement that primitive in
+    # an MIT-clean way:
+    #
+    #   * partially_load(device, extra_memory)
+    #       Iterate parameters biggest-first.  Each param that fits in
+    #       the remaining budget gets moved to ``device``.  The rest
+    #       stay where they are.
+    #
+    #   * partially_unload(device, extra_memory)
+    #       Iterate parameters smallest-first.  Move each one from the
+    #       load device to ``device`` until at least ``extra_memory``
+    #       bytes have been freed.
+    #
+    #   * current_loaded_size()
+    #       Total bytes of parameters currently resident on
+    #       ``self.load_device``.  Used by load_models_gpu to decide
+    #       whether a lowvram transition is needed.
+    # ------------------------------------------------------------------
+
+    def _iter_params_biggest_first(self):
+        params = [
+            (name, p)
+            for name, p in self.model.named_parameters(recurse=True)
+        ]
+        params.sort(key=lambda kv: kv[1].nelement() * kv[1].element_size(),
+                    reverse=True)
+        return params
+
+    def _iter_params_smallest_first(self):
+        params = [
+            (name, p)
+            for name, p in self.model.named_parameters(recurse=True)
+        ]
+        params.sort(key=lambda kv: kv[1].nelement() * kv[1].element_size())
+        return params
+
+    def _param_bytes(self, p: torch.Tensor) -> int:
+        return p.nelement() * p.element_size()
+
+    def current_loaded_size(self) -> int:
+        """Bytes of parameters currently resident on :attr:`load_device`.
+
+        Buffers are excluded — lowvram budgeting tracks trainable /
+        patched state only.  ComfyUI's lowvram tier works identically.
+        """
+        if self.model is None:
+            return 0
+        load_type = self.load_device.type if hasattr(self.load_device, "type") else None
+        if load_type is None:
+            return 0
+        total = 0
+        for _, p in self.model.named_parameters(recurse=True):
+            if p.device.type == load_type:
+                total += self._param_bytes(p)
+        return total
+
     def partially_load(self, device, extra_memory=0):
-        """Partially load model weights onto device.
+        """Move as much of the model to ``device`` as fits in ``extra_memory``.
+
+        Implements ComfyUI's lowvram semantics: parameters are moved
+        biggest-first so the most performance-critical layers land on
+        the compute device before anything small gets a chance at the
+        budget.  Parameters already on ``device`` are counted toward the
+        "already resident" total but not double-moved.
+
+        When ``extra_memory`` is larger than the full model, this is
+        equivalent to ``self.model.to(device)`` but cheaper: we only
+        call ``.data.to(...)`` per parameter rather than re-instantiating
+        them.  When ``extra_memory == 0`` this is a no-op.
 
         Args:
-            device: Target device.
-            extra_memory: Extra memory budget in bytes.
+            device: Target compute device (the same as ``load_device``
+                most of the time).
+            extra_memory: Byte budget.  Parameters that don't fit are
+                left where they currently sit (typically ``offload_device``).
         """
-        # TODO(Phase3): Implement partial loading.
-        pass
+        if self.model is None or extra_memory <= 0:
+            return
+
+        device = torch.device(device) if not isinstance(device, torch.device) else device
+        remaining = int(extra_memory)
+
+        with torch.no_grad():
+            for _, p in self._iter_params_biggest_first():
+                if p.device.type == device.type:
+                    continue  # already resident
+                size = self._param_bytes(p)
+                if size > remaining:
+                    continue
+                p.data = p.data.to(device, non_blocking=True)
+                remaining -= size
+
+        self.current_device = device
 
     def partially_unload(self, device, extra_memory=0):
-        """Partially unload model weights from device.
+        """Evict parameters from :attr:`load_device` back to ``device``.
+
+        Smallest-first eviction order — this keeps the most "useful"
+        big layers resident as long as possible (matching ComfyUI's
+        lowvram behavior under memory pressure).
 
         Args:
-            device: Offload device.
-            extra_memory: Memory to free in bytes.
+            device: Offload destination device (usually CPU).
+            extra_memory: Minimum bytes to free.  Eviction stops as
+                soon as cumulative freed bytes ≥ this value.
         """
-        # TODO(Phase3): Implement partial unloading.
-        pass
+        if self.model is None or extra_memory <= 0:
+            return
+
+        device = torch.device(device) if not isinstance(device, torch.device) else device
+        load_type = self.load_device.type
+        freed = 0
+
+        with torch.no_grad():
+            for _, p in self._iter_params_smallest_first():
+                if p.device.type != load_type:
+                    continue  # not resident, nothing to evict
+                size = self._param_bytes(p)
+                p.data = p.data.to(device, non_blocking=True)
+                freed += size
+                if freed >= extra_memory:
+                    break
+
+        if freed > 0:
+            self.current_device = device
 
 
 # ---------------------------------------------------------------------------
