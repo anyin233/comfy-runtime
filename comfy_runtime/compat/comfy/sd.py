@@ -65,12 +65,12 @@ class CLIP:
         patcher=None,
         clip_model2=None,
         tokenizer2=None,
+        family: str = "sd1",
     ):
         """Initialize CLIP wrapper.
 
         Args:
-            clip_model:    Primary text encoder (CLIP-L for SD1/SDXL,
-                CLIP-L for Flux, CLIP-L for SD3).
+            clip_model:    Primary text encoder (CLIP-L for SD1/SDXL/Flux/SD3).
             tokenizer:     Tokenizer for ``clip_model``.
             load_device:   Device for running inference.
             offload_device: Device for weight offloading.
@@ -80,8 +80,12 @@ class CLIP:
                 Flux / SD3.  ``None`` for single-encoder SD1.5.
             tokenizer2:    Tokenizer for ``clip_model2``.  When
                 ``None`` and ``clip_model2`` is set, ``tokenizer`` is
-                re-used (which is the SDXL convention — both encoders
-                share the CLIP BPE tokenizer).
+                re-used (SDXL convention — both encoders share the
+                CLIP BPE tokenizer; Flux uses a T5 tokenizer here).
+            family:        ``"sd1"``, ``"sdxl"``, or ``"flux"``.
+                Controls slot naming (``"l"`` + ``"g"`` for SDXL vs
+                ``"l"`` + ``"t5xxl"`` for Flux) and the conditioning
+                contract returned by :meth:`encode_from_tokens`.
         """
         self.clip_model = clip_model
         self.clip_model2 = clip_model2
@@ -92,6 +96,7 @@ class CLIP:
         self.offload_device = offload_device or torch.device("cpu")
         self.layer_idx = None
         self.cond_stage_model = clip_model
+        self.family = family
 
     def clone(self) -> "CLIP":
         """Create a clone of this CLIP wrapper.
@@ -109,17 +114,35 @@ class CLIP:
         cloned.offload_device = self.offload_device
         cloned.layer_idx = self.layer_idx
         cloned.cond_stage_model = self.cond_stage_model
+        cloned.family = getattr(self, "family", "sd1")
         if self.patcher is not None:
             cloned.patcher = self.patcher.clone()
         else:
             cloned.patcher = None
         return cloned
 
+    def _second_slot_name(self) -> str:
+        """Slot name for the secondary encoder.
+
+        * ``"g"``    for SDXL (OpenCLIP-G)
+        * ``"t5xxl"`` for Flux and SD3 (T5-XXL)
+
+        Determined from ``self.family`` which is set at construction.
+        """
+        family = getattr(self, "family", "sd1")
+        if family == "flux":
+            return "t5xxl"
+        if family == "sd3":
+            return "t5xxl"
+        # Default: SDXL dual CLIP
+        return "g"
+
     def tokenize(self, text: str, return_word_ids: bool = False):
         """Tokenize text into ComfyUI's chunked-weighted format.
 
-        Returns a dict with a ``"l"`` slot always, and additionally a
-        ``"g"`` slot when :attr:`clip_model2` is set (SDXL dual encoder).
+        Returns a dict with a ``"l"`` slot always, plus a second slot
+        when :attr:`clip_model2` is set — ``"g"`` for SDXL, ``"t5xxl"``
+        for Flux / SD3 (controlled by :attr:`family`).
 
         Args:
             text: Input text string.
@@ -136,8 +159,9 @@ class CLIP:
         )
         if getattr(self, "clip_model2", None) is not None:
             tok2 = self.tokenizer2 or self.tokenizer
+            slot2 = self._second_slot_name()
             tokens.update(
-                tokenize_to_comfy_format(tok2, text, max_length=77, slot="g")
+                tokenize_to_comfy_format(tok2, text, max_length=77, slot=slot2)
             )
         return tokens
 
@@ -206,12 +230,22 @@ class CLIP:
 
         l_cond, l_pooled = self._encode_slot(self.clip_model, tokens["l"])
 
-        g_model = getattr(self, "clip_model2", None)
-        if g_model is not None and "g" in tokens:
-            g_cond, g_pooled = self._encode_slot(g_model, tokens["g"])
+        second_model = getattr(self, "clip_model2", None)
+        family = getattr(self, "family", "sd1")
+
+        if second_model is not None and "g" in tokens:
             # SDXL: concat along hidden dim; pooled from G only.
+            g_cond, g_pooled = self._encode_slot(second_model, tokens["g"])
             cond = torch.cat([l_cond, g_cond], dim=-1)
             pooled = g_pooled
+        elif second_model is not None and "t5xxl" in tokens:
+            # Flux / SD3: T5 sequence is the conditioning; CLIP-L pooled
+            # flows in via pooled_projections.  The two outputs are NOT
+            # concatenated — they go through separate projection heads
+            # inside the FluxTransformer2DModel.
+            t5_cond, _t5_pooled = self._encode_slot(second_model, tokens["t5xxl"])
+            cond = t5_cond
+            pooled = l_pooled
         else:
             cond = l_cond
             pooled = l_pooled
@@ -499,7 +533,11 @@ def load_checkpoint_guess_config(
         _, unet, vae_mod, text_encoder, tokenizer = loaded
         clip = None
         if output_clip:
-            clip = CLIP(clip_model=text_encoder, tokenizer=tokenizer)
+            clip = CLIP(
+                clip_model=text_encoder,
+                tokenizer=tokenizer,
+                family="sd1",
+            )
     elif family == "sdxl":
         _, unet, vae_mod, te_l, te_g, tokenizer = loaded
         clip = None
@@ -508,6 +546,18 @@ def load_checkpoint_guess_config(
                 clip_model=te_l,
                 tokenizer=tokenizer,
                 clip_model2=te_g,
+                family="sdxl",
+            )
+    elif family == "flux":
+        _, unet, vae_mod, te_l, te_t5, tok_l, tok_t5 = loaded
+        clip = None
+        if output_clip:
+            clip = CLIP(
+                clip_model=te_l,
+                tokenizer=tok_l,
+                clip_model2=te_t5,
+                tokenizer2=tok_t5,
+                family="flux",
             )
     else:
         raise NotImplementedError(f"family {family!r} loading not implemented")
