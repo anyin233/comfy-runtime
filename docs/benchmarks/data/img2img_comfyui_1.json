@@ -4,41 +4,41 @@
   "run_idx": 1,
   "status": "ok",
   "error": null,
-  "total_ns": 2128275803,
+  "total_ns": 2108735679,
   "stages": [
     {
       "name": "model_load",
-      "elapsed_ns": 644868270,
+      "elapsed_ns": 653017105,
       "node_count": 1
     },
     {
       "name": "load_input",
-      "elapsed_ns": 9190391,
+      "elapsed_ns": 8996888,
       "node_count": 1
     },
     {
       "name": "text_encode",
-      "elapsed_ns": 118595067,
+      "elapsed_ns": 119143391,
       "node_count": 2
     },
     {
       "name": "vae_encode",
-      "elapsed_ns": 248610510,
+      "elapsed_ns": 250754397,
       "node_count": 1
     },
     {
       "name": "sample",
-      "elapsed_ns": 1026028164,
+      "elapsed_ns": 994890945,
       "node_count": 1
     },
     {
       "name": "decode",
-      "elapsed_ns": 41087101,
+      "elapsed_ns": 41052212,
       "node_count": 1
     },
     {
       "name": "save",
-      "elapsed_ns": 38062862,
+      "elapsed_ns": 39047520,
       "node_count": 1
     }
   ],
@@ -46,50 +46,50 @@
     {
       "class_type": "CheckpointLoaderSimple",
       "call_index": 0,
-      "elapsed_ns": 644868270
+      "elapsed_ns": 653017105
     },
     {
       "class_type": "LoadImage",
       "call_index": 0,
-      "elapsed_ns": 9190391
+      "elapsed_ns": 8996888
     },
     {
       "class_type": "VAEEncode",
       "call_index": 0,
-      "elapsed_ns": 248610510
+      "elapsed_ns": 250754397
     },
     {
       "class_type": "CLIPTextEncode",
       "call_index": 0,
-      "elapsed_ns": 104815372
+      "elapsed_ns": 105666111
     },
     {
       "class_type": "CLIPTextEncode",
       "call_index": 1,
-      "elapsed_ns": 13779695
+      "elapsed_ns": 13477280
     },
     {
       "class_type": "KSampler",
       "call_index": 0,
-      "elapsed_ns": 1026028164
+      "elapsed_ns": 994890945
     },
     {
       "class_type": "VAEDecode",
       "call_index": 0,
-      "elapsed_ns": 41087101
+      "elapsed_ns": 41052212
     },
     {
       "class_type": "SaveImage",
       "call_index": 0,
-      "elapsed_ns": 38062862
+      "elapsed_ns": 39047520
     }
   ],
   "gpu_peak_allocated_bytes": 2774034432,
   "gpu_peak_reserved_bytes": 3049259008,
-  "host_vmhwm_bytes": 7356018688,
+  "host_vmhwm_bytes": 7358599168,
   "env": {
     "hostname": "jazz1",
-    "timestamp_utc": "2026-04-10T12:58:45.523829Z",
+    "timestamp_utc": "2026-04-10T13:22:24.358374Z",
     "python_version": "3.13.7",
     "platform": "Linux-5.15.0-174-generic-x86_64-with-glibc2.35",
     "driver_version": "580.65.06",
@@ -102,7 +102,7 @@
       "--run-idx",
       "1",
       "--out",
-      "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e/results/20260410T125727Z/img2img_comfyui_1.json"
+      "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e/results/20260410T132106Z/img2img_comfyui_1.json"
     ],
     "cwd": "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e",
     "torch_version": "2.11.0+cu130",

@@ -4,46 +4,46 @@
   "run_idx": 2,
   "status": "ok",
   "error": null,
-  "total_ns": 3420781609,
+  "total_ns": 2235936173,
   "stages": [
     {
       "name": "model_load",
-      "elapsed_ns": 1350551747,
+      "elapsed_ns": 567169630,
       "node_count": 1
     },
     {
       "name": "load_input",
-      "elapsed_ns": 7672576,
+      "elapsed_ns": 7912900,
       "node_count": 1
     },
     {
       "name": "vae_encode",
-      "elapsed_ns": 257353904,
+      "elapsed_ns": 261994291,
       "node_count": 1
     },
     {
       "name": "noise_mask",
-      "elapsed_ns": 49581,
+      "elapsed_ns": 50801,
       "node_count": 1
     },
     {
       "name": "text_encode",
-      "elapsed_ns": 114736283,
+      "elapsed_ns": 116079932,
       "node_count": 2
     },
     {
       "name": "sample",
-      "elapsed_ns": 1468357592,
+      "elapsed_ns": 1200195378,
       "node_count": 1
     },
     {
       "name": "decode",
-      "elapsed_ns": 43365388,
+      "elapsed_ns": 43011995,
       "node_count": 1
     },
     {
       "name": "save",
-      "elapsed_ns": 35524040,
+      "elapsed_ns": 35723265,
       "node_count": 1
     }
   ],
@@ -51,55 +51,55 @@
     {
       "class_type": "CheckpointLoaderSimple",
       "call_index": 0,
-      "elapsed_ns": 1350551747
+      "elapsed_ns": 567169630
     },
     {
       "class_type": "LoadImage",
       "call_index": 0,
-      "elapsed_ns": 7672576
+      "elapsed_ns": 7912900
     },
     {
       "class_type": "VAEEncode",
       "call_index": 0,
-      "elapsed_ns": 257353904
+      "elapsed_ns": 261994291
     },
     {
       "class_type": "SetLatentNoiseMask",
       "call_index": 0,
-      "elapsed_ns": 49581
+      "elapsed_ns": 50801
     },
     {
       "class_type": "CLIPTextEncode",
       "call_index": 0,
-      "elapsed_ns": 100441500
+      "elapsed_ns": 101723856
     },
     {
       "class_type": "CLIPTextEncode",
       "call_index": 1,
-      "elapsed_ns": 14294783
+      "elapsed_ns": 14356076
     },
     {
       "class_type": "KSampler",
       "call_index": 0,
-      "elapsed_ns": 1468357592
+      "elapsed_ns": 1200195378
     },
     {
       "class_type": "VAEDecode",
       "call_index": 0,
-      "elapsed_ns": 43365388
+      "elapsed_ns": 43011995
     },
     {
       "class_type": "SaveImage",
       "call_index": 0,
-      "elapsed_ns": 35524040
+      "elapsed_ns": 35723265
     }
   ],
   "gpu_peak_allocated_bytes": 6884557312,
   "gpu_peak_reserved_bytes": 7088373760,
-  "host_vmhwm_bytes": 7251988480,
+  "host_vmhwm_bytes": 7294287872,
   "env": {
     "hostname": "jazz1",
-    "timestamp_utc": "2026-04-10T12:59:14.293448Z",
+    "timestamp_utc": "2026-04-10T13:22:53.191863Z",
     "python_version": "3.13.7",
     "platform": "Linux-5.15.0-174-generic-x86_64-with-glibc2.35",
     "driver_version": "580.65.06",
@@ -112,7 +112,7 @@
       "--run-idx",
       "2",
       "--out",
-      "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e/results/20260410T125727Z/inpainting_runtime_2.json"
+      "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e/results/20260410T132106Z/inpainting_runtime_2.json"
     ],
     "cwd": "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e",
     "torch_version": "2.11.0+cu130",

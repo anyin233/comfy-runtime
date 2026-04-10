@@ -4,26 +4,26 @@
   "run_idx": 1,
   "status": "ok",
   "error": null,
-  "total_ns": 1448982076,
+  "total_ns": 1438532023,
   "stages": [
     {
       "name": "load_input",
-      "elapsed_ns": 9988333,
+      "elapsed_ns": 9980073,
       "node_count": 1
     },
     {
       "name": "model_load",
-      "elapsed_ns": 313544075,
+      "elapsed_ns": 299426435,
       "node_count": 1
     },
     {
       "name": "upscale",
-      "elapsed_ns": 610446519,
+      "elapsed_ns": 612112327,
       "node_count": 1
     },
     {
       "name": "save",
-      "elapsed_ns": 513546724,
+      "elapsed_ns": 515589795,
       "node_count": 1
     }
   ],
@@ -31,30 +31,30 @@
     {
       "class_type": "LoadImage",
       "call_index": 0,
-      "elapsed_ns": 9988333
+      "elapsed_ns": 9980073
     },
     {
       "class_type": "UpscaleModelLoader",
       "call_index": 0,
-      "elapsed_ns": 313544075
+      "elapsed_ns": 299426435
     },
     {
       "class_type": "ImageUpscaleWithModel",
       "call_index": 0,
-      "elapsed_ns": 610446519
+      "elapsed_ns": 612112327
     },
     {
       "class_type": "SaveImage",
       "call_index": 0,
-      "elapsed_ns": 513546724
+      "elapsed_ns": 515589795
     }
   ],
   "gpu_peak_allocated_bytes": 3291584512,
   "gpu_peak_reserved_bytes": 5507121152,
-  "host_vmhwm_bytes": 1374994432,
+  "host_vmhwm_bytes": 1375215616,
   "env": {
     "hostname": "jazz1",
-    "timestamp_utc": "2026-04-10T13:02:01.847240Z",
+    "timestamp_utc": "2026-04-10T13:25:45.371594Z",
     "python_version": "3.13.7",
     "platform": "Linux-5.15.0-174-generic-x86_64-with-glibc2.35",
     "driver_version": "580.65.06",
@@ -67,7 +67,7 @@
       "--run-idx",
       "1",
       "--out",
-      "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e/results/20260410T125727Z/esrgan_upscale_comfyui_1.json"
+      "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e/results/20260410T132106Z/esrgan_upscale_comfyui_1.json"
     ],
     "cwd": "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e",
     "torch_version": "2.11.0+cu130",

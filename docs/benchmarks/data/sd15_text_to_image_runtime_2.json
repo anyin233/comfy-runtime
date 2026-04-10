@@ -4,36 +4,36 @@
   "run_idx": 2,
   "status": "ok",
   "error": null,
-  "total_ns": 3188010376,
+  "total_ns": 1984627795,
   "stages": [
     {
       "name": "model_load",
-      "elapsed_ns": 1262628349,
+      "elapsed_ns": 542508905,
       "node_count": 1
     },
     {
       "name": "text_encode",
-      "elapsed_ns": 123401025,
+      "elapsed_ns": 123699036,
       "node_count": 2
     },
     {
       "name": "latent_init",
-      "elapsed_ns": 61481,
+      "elapsed_ns": 65821,
       "node_count": 1
     },
     {
       "name": "sample",
-      "elapsed_ns": 1421995921,
+      "elapsed_ns": 1134555242,
       "node_count": 1
     },
     {
       "name": "decode",
-      "elapsed_ns": 145789390,
+      "elapsed_ns": 144673509,
       "node_count": 1
     },
     {
       "name": "save",
-      "elapsed_ns": 35782904,
+      "elapsed_ns": 35639914,
       "node_count": 1
     }
   ],
@@ -41,45 +41,45 @@
     {
       "class_type": "CheckpointLoaderSimple",
       "call_index": 0,
-      "elapsed_ns": 1262628349
+      "elapsed_ns": 542508905
     },
     {
       "class_type": "CLIPTextEncode",
       "call_index": 0,
-      "elapsed_ns": 109616580
+      "elapsed_ns": 109941231
     },
     {
       "class_type": "CLIPTextEncode",
       "call_index": 1,
-      "elapsed_ns": 13784445
+      "elapsed_ns": 13757805
     },
     {
       "class_type": "EmptyLatentImage",
       "call_index": 0,
-      "elapsed_ns": 61481
+      "elapsed_ns": 65821
     },
     {
       "class_type": "KSampler",
       "call_index": 0,
-      "elapsed_ns": 1421995921
+      "elapsed_ns": 1134555242
     },
     {
       "class_type": "VAEDecode",
       "call_index": 0,
-      "elapsed_ns": 145789390
+      "elapsed_ns": 144673509
     },
     {
       "class_type": "SaveImage",
       "call_index": 0,
-      "elapsed_ns": 35782904
+      "elapsed_ns": 35639914
     }
   ],
   "gpu_peak_allocated_bytes": 5250263552,
   "gpu_peak_reserved_bytes": 5454692352,
-  "host_vmhwm_bytes": 7253254144,
+  "host_vmhwm_bytes": 7296892928,
   "env": {
     "hostname": "jazz1",
-    "timestamp_utc": "2026-04-10T12:57:43.219486Z",
+    "timestamp_utc": "2026-04-10T13:21:21.760873Z",
     "python_version": "3.13.7",
     "platform": "Linux-5.15.0-174-generic-x86_64-with-glibc2.35",
     "driver_version": "580.65.06",
@@ -92,7 +92,7 @@
       "--run-idx",
       "2",
       "--out",
-      "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e/results/20260410T125727Z/sd15_text_to_image_runtime_2.json"
+      "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e/results/20260410T132106Z/sd15_text_to_image_runtime_2.json"
     ],
     "cwd": "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e",
     "torch_version": "2.11.0+cu130",
