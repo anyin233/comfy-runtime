@@ -103,7 +103,8 @@ def test_ksampler_is_deterministic_across_runs():
     assert torch.allclose(out1, out2)
 
 
-def test_ksampler_rejects_unknown_sampler_name():
+def test_ksampler_runs_with_dpmpp_2m():
+    """dpmpp_2m is the most common SDXL sampler; must work."""
     model, clip = _build_tiny_stack()
     positive = clip.encode_from_tokens_scheduled(clip.tokenize("a"))
     negative = clip.encode_from_tokens_scheduled(clip.tokenize(""))
@@ -111,9 +112,58 @@ def test_ksampler_rejects_unknown_sampler_name():
     noise = torch.randn(1, 4, 8, 8)
     sigmas = samplers.calculate_sigmas(None, "normal", 2)
 
-    sampler = samplers.sampler_object("lms")  # Phase-2 sampler, unimplemented
+    sampler = samplers.sampler_object("dpmpp_2m")
+    out = sampler.sample(
+        model=model, noise=noise, positive=positive, negative=negative,
+        cfg=1.0, latent_image=latent, sigmas=sigmas, disable_pbar=True,
+    )
+    assert out.shape == latent.shape
+    assert not torch.isnan(out).any()
+
+
+def test_ksampler_runs_with_uni_pc():
+    """uni_pc is ComfyUI's fastest standard sampler; must work."""
+    model, clip = _build_tiny_stack()
+    positive = clip.encode_from_tokens_scheduled(clip.tokenize("a"))
+    negative = clip.encode_from_tokens_scheduled(clip.tokenize(""))
+    latent = torch.zeros(1, 4, 8, 8)
+    noise = torch.randn(1, 4, 8, 8)
+    sigmas = samplers.calculate_sigmas(None, "normal", 2)
+
+    sampler = samplers.sampler_object("uni_pc")
+    out = sampler.sample(
+        model=model, noise=noise, positive=positive, negative=negative,
+        cfg=1.0, latent_image=latent, sigmas=sigmas, disable_pbar=True,
+    )
+    assert out.shape == latent.shape
+    assert not torch.isnan(out).any()
+
+
+def test_scheduler_map_covers_common_samplers():
+    """Every sampler a typical workflow uses must be mapped."""
+    from comfy_runtime.compat.comfy._scheduler_map import supported_sampler_names
+
+    supported = set(supported_sampler_names())
+    must_have = {
+        "euler", "euler_ancestral", "heun", "lms",
+        "dpmpp_2m", "dpmpp_2m_sde", "dpmpp_sde",
+        "dpmpp_2s_ancestral", "ddim", "ddpm", "lcm",
+        "uni_pc", "uni_pc_bh2",
+    }
+    missing = must_have - supported
+    assert not missing, f"missing sampler mappings: {missing}"
+
+
+def test_unsupported_sampler_raises_helpful_error():
+    """Phase-2 unsupported samplers should raise NotImplementedError with a hint."""
+    from comfy_runtime.compat.comfy._scheduler_map import make_diffusers_scheduler
+
+    with pytest.raises(NotImplementedError, match="Use 'dpmpp_2m'"):
+        make_diffusers_scheduler("dpm_fast", "normal")
+
+
+def test_unknown_sampler_raises_keyerror():
+    from comfy_runtime.compat.comfy._scheduler_map import make_diffusers_scheduler
+
     with pytest.raises(KeyError):
-        sampler.sample(
-            model=model, noise=noise, positive=positive, negative=negative,
-            cfg=1.0, latent_image=latent, sigmas=sigmas, disable_pbar=True,
-        )
+        make_diffusers_scheduler("totally_made_up", "normal")
