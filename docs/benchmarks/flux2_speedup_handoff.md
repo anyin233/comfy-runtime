@@ -1,8 +1,23 @@
 # Flux2 Speedup Recovery — Handoff Notes
 
-**Branch:** `feature/flux2-investigation`
-**Worktree:** `/home/yanweiye/Project/comfy_runtime/.worktrees/flux2-investigation` (now removed)
-**Last commit before handoff:** WIP commit with `comfy_runtime.unload_all_models()` public API added
+**Branch:** `feature/flux2-investigation` (pushed to `origin`)
+**Fork off point:** `main` at commit `d2a76fa` — "Merge branch 'feature/e2e-benchmark': e2e benchmark vs upstream ComfyUI"
+**Branch HEAD at handoff:** `c8eaf97` — "wip(flux2): add unload_all_models API + handoff doc (currently a net loss)"
+**Commits on branch beyond `main`:** just `c8eaf97` (the WIP). Everything else in this investigation — the dual-import bugfix `fcbc98e` and the Flux2-included benchmark rerun `0bc51f6` — is already merged into `main` at `d2a76fa`.
+
+## Environment assumptions
+
+This document is path-agnostic — the investigation was done on one machine and is being
+resumed on another. Where needed, the following placeholders are used:
+
+| Placeholder | Meaning |
+|---|---|
+| `$REPO` | Absolute path to the `comfy_runtime` repository clone on the current machine |
+| `$COMFYUI_PATH` | Absolute path to a sibling clone of upstream `ComfyUI` at tag/commit `0.18.1` (used for the benchmark's upstream comparison) |
+
+The original investigation ran on an Ubuntu host with an RTX 4090 24 GB. Behaviour may
+differ on other GPUs, particularly on smaller-VRAM cards where Flux2 may never fit at
+1024×1024 without tiling regardless of the fix.
 
 ## Status: Stalled — naive `unload_all_models()` is a net LOSS
 
@@ -58,10 +73,26 @@ harness) shows BOTH runtime and upstream ComfyUI hit exactly `23361 MB peak` for
 The only reason upstream's BENCHMARK result is 17.5 GB is that the benchmark harness
 runs upstream through `PromptExecutor.execute_async`, which has the auto-eviction walker.
 
-Scripts used:
-- `benchmarks/e2e/profiling/probe_runtime.py` / `probe_comfyui.py` — step-by-step mem
-- `/tmp/flux2_mem_probe.py` (not saved into repo) — the one that showed both hit 23.3 GB
-- `/tmp/flux2_fix_test.py` (not saved) — proved `mm.free_memory(1e30, cuda)` would work
+Scripts used (all committed to `benchmarks/e2e/profiling/` — no more ephemeral `/tmp/` paths):
+- `probe_runtime.py` / `probe_comfyui.py` — step-by-step memory for sd15 (used earlier)
+- `flux2_upstream.py` — runs Flux2 entirely through upstream ComfyUI (shows it works and produces correct output)
+- `flux2_shapes.py` — dumps conditioning/latent shapes on both sides; showed runtime returns `ZImageTEModel_` with `(1, 16, 2560)` while upstream returns `Flux2TEModel_` with `(1, 512, 7680)`
+- `flux2_enum.py` — verifies `CLIPType.FLUX2` value, `detect_te_model` result, and the `==` comparison all agree on both sides at the value level
+- `flux2_dual_import.py` — **proves the identity mismatch bug**: shows `from comfy.sd import CLIPType` and `from comfy_runtime._vendor.comfy.sd import CLIPType` return two different enum classes that are not `==`-equal
+- `flux2_cliploader_test.py` — verifies the `_vendor_import` fix works: `CLIPLoader(type="flux2")` now returns `Flux2TEModel_`
+- `flux2_mem_probe.py` — walks the Flux2 workflow step-by-step on both sides, prints GPU alloc/peak/reserved and `current_loaded_models` after every node. **Key finding:** both sides hit exactly `23361 MB` peak when run via direct `execute_node` calls outside any harness.
+- `flux2_fix_test.py` — proves that two `mm.free_memory(1e30, cuda)` calls bring peak down to `11848 MB` and drop decode time from 971 ms to 274 ms
+- `flux2_unload_timing.py` — measures each `unload_all_models()` call in isolation (3.3 s each)
+- `flux2_unload_profile.py` — **profiles where the 3.3 s goes**: `free_memory(1e30)` takes the whole 3278.8 ms, `empty_cache` alone takes 3.3 ms
+- `flux2_fast_unload.py` — the unverified sketch of the fast-unload helper that should replace the current naive path (the investigation was interrupted right as it was about to run)
+
+All scripts now use `Path(__file__).resolve().parents[3]` to find the repo root and honour `COMFYUI_PATH` / `WORKFLOW_MODELS` env vars for paths outside the repo. Run any of them from the repo root with:
+
+```bash
+benchmarks/e2e/runtime-env/.venv/bin/python benchmarks/e2e/profiling/flux2_<name>.py
+# or, if the probe has a "runtime"/"comfyui" arg:
+benchmarks/e2e/runtime-env/.venv/bin/python benchmarks/e2e/profiling/flux2_mem_probe.py runtime
+```
 
 ## The WIP fix (committed on this branch, NOT WORKING YET)
 
@@ -102,7 +133,7 @@ flux2_klein_text_to_image  23096 ms   15246 ms   0.66x   ← WORSE than before
 
 ## Where the 3.3 seconds per unload goes
 
-Profiled via `/tmp/flux2_unload_profile.py`:
+Profiled via `benchmarks/e2e/profiling/flux2_unload_profile.py`:
 
 ```
 A) empty_cache only:                   3.3 ms
@@ -159,8 +190,10 @@ so no strong refs remain and the weights can be reclaimed.
 
 ## Test that was about to run
 
-`/tmp/flux2_fast_unload.py` — proved out the above approach. Script was about to execute
-but got interrupted. Recreate by implementing:
+`benchmarks/e2e/profiling/flux2_fast_unload.py` — the unverified sketch of the
+fast-unload approach. Was about to execute for the first time when the session
+got interrupted. The script is committed but has NOT been run against real
+hardware yet. Implementation sketch inside the script:
 
 ```python
 import comfy.model_management as mm
@@ -193,35 +226,85 @@ Or more conservatively, matching the measured single-pass decode (256 ms), the t
 should land somewhere between **14500 and 15000 ms**, making Flux2 roughly
 tie with or slightly beat upstream.
 
-## How to resume from main
+## How to resume from scratch (new machine)
 
-The investigation worktree (`/home/yanweiye/Project/comfy_runtime/.worktrees/flux2-investigation`)
-has been removed. To resume:
+Set `$REPO` to wherever you have (or want to clone) `comfy_runtime` on the new machine,
+and `$COMFYUI_PATH` to wherever upstream ComfyUI is (or will be) cloned. The benchmark
+harness uses `$COMFYUI_PATH` only to run the upstream comparison; if you just want to
+iterate on the fix without re-running the full benchmark, you can skip setting it up.
 
 ```bash
-cd /home/yanweiye/Project/comfy_runtime
+# 1. Clone comfy_runtime if you don't have it yet
+git clone https://github.com/anyin233/comfy-runtime.git $REPO
+cd $REPO
 git fetch origin
+git checkout main
+
+# 2. Create an isolated worktree for this investigation
 git worktree add .worktrees/flux2-investigation feature/flux2-investigation
 cd .worktrees/flux2-investigation
+```
 
-# The vendored comfy tree is gitignored; symlink from parent repo
-ln -s /home/yanweiye/Project/comfy_runtime/comfy_runtime/_vendor comfy_runtime/_vendor
+### Vendored comfy tree
 
-# Rebuild the runtime-env venv (editable install of this worktree)
+`comfy_runtime/_vendor/` is gitignored — it contains a snapshot of upstream ComfyUI's
+`comfy/` tree that comfy_runtime ships internally. On the previous machine it existed
+under `$REPO/comfy_runtime/_vendor` and the worktree used a symlink to share it.
+
+On the new machine, you need `_vendor/` populated before anything inference-related
+works. The three options, in order of ease:
+
+1. **Copy from a working checkout** (fastest if available):
+   ```bash
+   # If you have another clone that already has _vendor populated (e.g. the parent
+   # repo on this machine or a cached copy from the previous machine):
+   cp -r /path/to/known-good/comfy_runtime/_vendor comfy_runtime/_vendor
+   ```
+
+2. **Symlink from the parent repo** (fastest if you keep multiple worktrees):
+   ```bash
+   # From inside the worktree:
+   ln -s $REPO/comfy_runtime/_vendor comfy_runtime/_vendor
+   # Remember to unignore symlinks in .gitignore if they show up in git status —
+   # there's already a `_vendor` (no trailing slash) entry in .gitignore for this.
+   ```
+
+3. **Regenerate from upstream ComfyUI** (if neither of the above applies): the repo's
+   build infrastructure should document how `_vendor` is produced. Look for a
+   Makefile, `scripts/sync_vendor.py`, or similar. As of commit `d2a76fa` on main I
+   didn't inspect this path closely — check `comfy_runtime/__init__.py` and
+   `comfy_runtime/bootstrap.py` for import paths to figure out which upstream version
+   was vendored.
+
+### Python environment
+
+```bash
+# Rebuild the runtime-env venv for this worktree (editable install of this worktree)
 cd benchmarks/e2e/runtime-env && uv sync && cd ../../..
 
-# The comfyui-env is only needed for upstream-side benchmark comparison; skip for now
-
-# Restore workflow model symlinks + input images
-for w in sd15_text_to_image img2img inpainting hires_fix area_composition flux2_klein_text_to_image esrgan_upscale; do
-  mkdir -p workflows/$w/models
-  for sub in $(ls /home/yanweiye/Project/comfy_runtime/workflows/$w/models/ 2>/dev/null); do
-    if [ -d /home/yanweiye/Project/comfy_runtime/workflows/$w/models/$sub ]; then
-      ln -sfn /home/yanweiye/Project/comfy_runtime/workflows/$w/models/$sub workflows/$w/models/$sub
-    fi
-  done
-done
+# (Optional) rebuild the comfyui-env venv only if you want to re-run the full
+# cross-framework benchmark. For pure fast-unload iteration you don't need it.
+# cd benchmarks/e2e/comfyui-env && uv sync && cd ../../..
 ```
+
+### Model files (required for any real run)
+
+The workflows under `workflows/*/models/` are gitignored. You need to either (a) let
+each workflow's `workflow_utils/download_models.py` fetch them from Hugging Face on
+first run, or (b) bring them across from the previous machine. Flux2 Klein specifically
+needs:
+
+- `workflows/flux2_klein_text_to_image/models/diffusion_models/flux-2-klein-base-4b.safetensors` (~7.7 GB)
+- `workflows/flux2_klein_text_to_image/models/text_encoders/qwen_3_4b.safetensors` (~7.5 GB)
+- `workflows/flux2_klein_text_to_image/models/vae/flux2-vae.safetensors` (~0.3 GB)
+
+Run `python workflows/flux2_klein_text_to_image/workflow_utils/download_models.py` to
+auto-download.
+
+For the other 6 workflows (all SD1.5-based plus ESRGAN), the downloaded files can be
+shared across workflows — the benchmark harness historically symlinked each
+`workflows/<name>/models/` to a single canonical location, but this is optional.
+
 
 ## Other branches / state to be aware of
 

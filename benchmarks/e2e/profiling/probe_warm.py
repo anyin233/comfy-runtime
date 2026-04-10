@@ -1,8 +1,21 @@
-import sys, time
-sys.path.insert(0, "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark")
-import torch
-import comfy_runtime
-comfy_runtime.configure(models_dir="/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/workflows/sd15_text_to_image/models")
+"""probe_warm.py"""
+import os
+import sys
+from pathlib import Path
+
+# Repo root: this file is at $REPO/benchmarks/e2e/profiling/, so 3 parents up.
+REPO = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO))
+
+# Upstream ComfyUI clone path (overridable via env var).
+COMFYUI_PATH = os.environ.get("COMFYUI_PATH", "/home/yanweiye/Project/ComfyUI")
+
+# Workflow models root (overridable via env var).
+WORKFLOW_MODELS = Path(os.environ.get("WORKFLOW_MODELS", REPO / "workflows"))
+SD15_MODELS_DIR = str(WORKFLOW_MODELS / "sd15_text_to_image" / "models")
+SD15_CHECKPOINTS_DIR = str(WORKFLOW_MODELS / "sd15_text_to_image" / "models" / "checkpoints")
+
+comfy_runtime.configure(models_dir=SD15_MODELS_DIR)
 
 # Warmup: trigger bridge init
 comfy_runtime.execute_node("CheckpointLoaderSimple", ckpt_name="v1-5-pruned-emaonly.safetensors")
@@ -41,3 +54,4 @@ sampled = EX("KSampler", model=model, positive=pos, negative=neg, latent_image=l
              seed=42, steps=20, cfg=8.0, sampler_name="euler", scheduler="normal", denoise=1.0)
 torch.cuda.synchronize()
 print(f"KSampler (2nd call):     {(time.perf_counter()-t0)*1000:.1f}ms")
+
