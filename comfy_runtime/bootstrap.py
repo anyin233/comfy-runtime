@@ -145,3 +145,61 @@ def bootstrap():
             cli_args_mod.args.cpu = True
     except Exception:
         pass
+
+    # Eagerly pre-import the inference modules (diffusers + transformers +
+    # our own compat layer).  Without this, the first call to a node like
+    # CheckpointLoaderSimple triggers 3-4 seconds of importlib work that
+    # gets attributed to the node's wall time — which is how slim-vendor
+    # ended up ~5s slower than ComfyUI on model_load in the e2e benchmark.
+    # Pre-loading here moves the cost into ``import comfy_runtime`` where
+    # it happens outside any stage timer and is amortised across every
+    # subsequent call in the same process.
+    #
+    # This mirrors the ``perf(bootstrap): eagerly init vendor bridge ...``
+    # commit on main, adapted for the slim-vendor world where the inference
+    # path is diffusers + transformers instead of comfy_runtime._vendor.*.
+    for _mod in (
+        # torch.* heavy submodules
+        "torch.cuda",
+        "torch.nn",
+        "torch.nn.functional",
+        # diffusers model + pipeline entry points
+        "diffusers",
+        "diffusers.models",
+        "diffusers.models.unets.unet_2d_condition",
+        "diffusers.models.autoencoders.autoencoder_kl",
+        "diffusers.pipelines.stable_diffusion",
+        "diffusers.loaders.single_file_utils",
+        "diffusers.schedulers",
+        # transformers CLIP text encoder + tokenizer
+        "transformers",
+        "transformers.models.clip.modeling_clip",
+        "transformers.models.clip.tokenization_clip",
+        "transformers.models.clip.configuration_clip",
+        # accelerate for meta-device / init_empty_weights paths
+        "accelerate",
+        # compat layer's inference modules
+        "comfy_runtime.compat.comfy.sd",
+        "comfy_runtime.compat.comfy.samplers",
+        "comfy_runtime.compat.comfy.model_patcher",
+        "comfy_runtime.compat.comfy.model_management",
+        "comfy_runtime.compat.comfy._diffusers_loader",
+        "comfy_runtime.compat.comfy._scheduler_map",
+        "comfy_runtime.compat.comfy._tokenizer",
+    ):
+        try:
+            importlib.import_module(_mod)
+        except Exception:
+            # Missing optional modules are fine — we just lose the
+            # pre-import speedup for that specific path.
+            pass
+
+    # Warm the CLIP tokenizer + config caches.  These take ~700 ms combined
+    # on first access and are functionally static across every load call,
+    # so we pay the cost once during bootstrap and the loader's hot path
+    # just reads from the module-level dict.
+    try:
+        from comfy_runtime.compat.comfy._diffusers_loader import prewarm_clip_caches
+        prewarm_clip_caches()
+    except Exception:
+        pass

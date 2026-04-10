@@ -562,17 +562,61 @@ def load_checkpoint_guess_config(
     else:
         raise NotImplementedError(f"family {family!r} loading not implemented")
 
+    # Compute device for this machine.  ``get_torch_device`` returns
+    # ``cuda:0`` when CUDA is available and ``cpu`` otherwise, so the
+    # CPU-only test path is unchanged.
+    from comfy_runtime.compat.comfy.model_management import get_torch_device
+
+    compute_device = get_torch_device()
+    # fp16 is the ComfyUI default for SD1.5 / SDXL / Flux UNets and CLIP
+    # on GPU — it halves both VRAM footprint and compute vs fp32.  We
+    # keep the VAE in fp32 to avoid the well-known SD1.5 fp16-VAE NaN
+    # issue that produces black / over-saturated outputs.
+    is_cuda = compute_device.type == "cuda"
+    unet_dtype = torch.float16 if is_cuda else torch.float32
+    clip_dtype = torch.float16 if is_cuda else torch.float32
+    vae_dtype = torch.float32
+
     model = None
     if output_model:
+        # Move the UNet to the compute device and cast to the target
+        # dtype *before* wrapping in ModelPatcher so the patcher's
+        # ``load_device`` reflects where the weights actually live.
+        try:
+            unet.to(device=compute_device, dtype=unet_dtype)
+        except (TypeError, NotImplementedError):
+            # Some fp8-cast models can't go through the high-level
+            # ``.to(dtype=...)`` path on older torch; keep them where
+            # they are if that fails.  The bench happy path is fp16.
+            pass
         model = ModelPatcher(
             unet,
-            load_device=torch.device("cpu"),
+            load_device=compute_device,
             offload_device=torch.device("cpu"),
         )
 
+    if clip is not None:
+        # Move both encoders (dual-encoder paths have clip_model2).
+        try:
+            if clip.clip_model is not None:
+                clip.clip_model.to(device=compute_device, dtype=clip_dtype)
+            clip_model2 = getattr(clip, "clip_model2", None)
+            if clip_model2 is not None:
+                clip_model2.to(device=compute_device, dtype=clip_dtype)
+        except (TypeError, NotImplementedError):
+            pass
+        clip.load_device = compute_device
+
     vae_wrapper = None
     if output_vae:
-        vae_wrapper = VAE(vae_model=vae_mod)
+        if vae_mod is not None:
+            try:
+                vae_mod.to(device=compute_device, dtype=vae_dtype)
+            except (TypeError, NotImplementedError):
+                pass
+        vae_wrapper = VAE(
+            vae_model=vae_mod, device=compute_device, dtype=vae_dtype
+        )
 
     return model, clip, vae_wrapper, None
 
