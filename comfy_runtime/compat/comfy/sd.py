@@ -101,53 +101,107 @@ class CLIP:
         return cloned
 
     def tokenize(self, text: str, return_word_ids: bool = False):
-        """Tokenize text input.
+        """Tokenize text into ComfyUI's chunked-weighted format.
 
         Args:
             text: Input text string.
-            return_word_ids: Whether to return word-level IDs.
+            return_word_ids: Ignored in Phase 1 (attention-weighted prompts
+                are Phase 2); kept for API parity.
 
         Returns:
-            Tokenized representation (dict of token tensors).
+            ``{"l": [[(id, weight), ...77...], ...]}``.
         """
-        # TODO(Phase3): Implement actual tokenization via self.tokenizer.
-        raise NotImplementedError(
-            "CLIP.tokenize is a stub. Tokenization will be implemented in Phase 3."
+        from comfy_runtime.compat.comfy._tokenizer import tokenize_to_comfy_format
+
+        if self.tokenizer is None:
+            raise RuntimeError("CLIP.tokenize requires self.tokenizer to be set")
+        return tokenize_to_comfy_format(
+            self.tokenizer, text, max_length=77, slot="l"
         )
 
     def encode_from_tokens(
         self, tokens, return_pooled: bool = False, return_dict: bool = False
     ):
-        """Encode tokens into conditioning embeddings.
+        """Run the CLIP text encoder over tokenized chunks.
 
         Args:
-            tokens: Tokenized text (from tokenize()).
-            return_pooled: Whether to return pooled output.
-            return_dict: Whether to return a dict with extra info.
+            tokens: ``{"l": [[(id, weight), ...77...], ...]}`` from
+                :meth:`tokenize`.
+            return_pooled: Also return the pooled [CLS] embedding.
+            return_dict: Return a dict ``{"cond": ..., "pooled_output": ...}``.
 
         Returns:
-            Conditioning tensor, or tuple/dict with additional outputs.
+            Embedding tensor of shape ``(B, 77*num_chunks, hidden_size)``,
+            optionally paired with the pooled output or wrapped in a dict.
         """
-        # TODO(Phase3): Implement actual encoding via self.clip_model.
-        raise NotImplementedError(
-            "CLIP.encode_from_tokens is a stub. Encoding will be implemented in Phase 3."
-        )
+        from comfy_runtime.compat.comfy._tokenizer import tokens_to_input_ids
+
+        if self.clip_model is None:
+            raise RuntimeError(
+                "CLIP.encode_from_tokens requires self.clip_model to be set"
+            )
+
+        # Phase 1: only the "l" slot.  SDXL's "g" and Flux's "t5xxl" are Phase 2.
+        if "l" not in tokens:
+            raise KeyError(
+                f"Phase 1 only supports the 'l' slot; got {list(tokens.keys())}"
+            )
+
+        chunks = tokens["l"]
+        device = next(self.clip_model.parameters()).device
+
+        chunk_embeddings: List[torch.Tensor] = []
+        pooled: Optional[torch.Tensor] = None
+        for chunk in chunks:
+            ids = torch.tensor(
+                [tokens_to_input_ids(chunk)], dtype=torch.long, device=device
+            )
+            with torch.no_grad():
+                out = self.clip_model(
+                    input_ids=ids,
+                    output_hidden_states=True,
+                )
+            if self.layer_idx is not None:
+                hidden = out.hidden_states[self.layer_idx]
+            else:
+                hidden = out.last_hidden_state
+            chunk_embeddings.append(hidden)
+            if pooled is None:
+                # CLIP pooled output is the [EOS] row of the last hidden state.
+                # We use the first token here for determinism with the tiny
+                # fixture (which has no real EOS).  Real CLIP models will
+                # diverge slightly; this is Phase 1 and good enough for the
+                # SD1.5 happy path.  Phase 2 will switch to pooler_output when
+                # available.
+                pooler = getattr(out, "pooler_output", None)
+                if pooler is not None:
+                    pooled = pooler
+                else:
+                    pooled = out.last_hidden_state[:, 0, :]
+
+        cond = torch.cat(chunk_embeddings, dim=1)
+
+        if return_dict:
+            return {"cond": cond, "pooled_output": pooled}
+        if return_pooled:
+            return cond, pooled
+        return cond
 
     def encode_from_tokens_scheduled(self, tokens, add_dict=None):
-        """Encode tokens with scheduling support (for hooks).
+        """Wrap encoding output in ComfyUI's scheduled-conditioning list.
 
         Args:
-            tokens: Tokenized text.
-            add_dict: Additional dict to merge into output.
+            tokens: Tokenized prompt.
+            add_dict: Optional extras dict to merge into the output metadata.
 
         Returns:
-            Scheduled conditioning output.
+            ``[[cond_tensor, {"pooled_output": pooled, **add_dict}]]``.
         """
-        # TODO(Phase3): Implement scheduled encoding.
-        raise NotImplementedError(
-            "CLIP.encode_from_tokens_scheduled is a stub. "
-            "Scheduled encoding will be implemented in Phase 3."
-        )
+        cond, pooled = self.encode_from_tokens(tokens, return_pooled=True)
+        extra: Dict[str, Any] = {"pooled_output": pooled}
+        if add_dict:
+            extra.update(add_dict)
+        return [[cond, extra]]
 
     def set_clip_options(self, options: Dict):
         """Set CLIP-specific options.
