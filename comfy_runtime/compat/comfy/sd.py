@@ -568,9 +568,14 @@ def load_unet(
 
     Args:
         unet_path: Path to the UNet safetensors file.
-        dtype: Optional target dtype (fp16 / fp8_e4m3fn / fp8_e5m2).
-            Phase 1 accepts the argument but doesn't cast (Phase 3
-            adds fp8 handling).
+        dtype: Target dtype for the loaded parameters.  Accepts any
+            ``torch.dtype`` — notably ``torch.float16``,
+            ``torch.bfloat16``, ``torch.float8_e4m3fn``, and
+            ``torch.float8_e5m2``.  fp8 dtypes cut VRAM usage to 1/4
+            of fp32 at the cost of accuracy; forward-pass computation
+            upcasts back to fp16 via torch's native fp8 → fp16 path.
+            ``None`` (the default) leaves the model in whatever dtype
+            the file shipped with (usually fp32 for real checkpoints).
         model_options: Unused in Phase 1.
 
     Returns:
@@ -589,11 +594,37 @@ def load_unet(
         comp = make_tiny_sd15()
         unet = comp["unet"]
 
+    if dtype is not None:
+        _cast_parameters(unet, dtype)
+
     return ModelPatcher(
         unet,
         load_device=torch.device("cpu"),
         offload_device=torch.device("cpu"),
     )
+
+
+def _cast_parameters(module, dtype) -> None:
+    """Cast every Parameter in ``module`` in place to ``dtype``.
+
+    Unlike ``module.to(dtype)``, this works for fp8 dtypes which don't
+    yet support the high-level ``.to()`` path on older torch versions.
+    Buffers (running stats, etc.) are left alone — they're not in the
+    weights we care about for VRAM budgeting.
+    """
+    import torch.nn as nn
+
+    for m in module.modules():
+        if not isinstance(m, nn.Module):
+            continue
+        for name in list(m._parameters.keys()):
+            p = m._parameters[name]
+            if p is None:
+                continue
+            m._parameters[name] = nn.Parameter(
+                p.data.to(dtype=dtype),
+                requires_grad=False,
+            )
 
 
 def load_lora_for_models(
