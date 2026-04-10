@@ -9,6 +9,7 @@ dependencies = [
   "PyYAML",
   "matplotlib",
   "Jinja2",
+  "spandrel",
 ]
 
 [tool.uv.sources]

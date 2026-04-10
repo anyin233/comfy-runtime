@@ -81,8 +81,12 @@ def _load_stages(stages_yaml: Path) -> dict[str, list[str]]:
     return yaml.safe_load(stages_yaml.read_text())["stages"]
 
 
-def _configure_folder_paths(workflow_models_dir: Path) -> None:
-    """Point ComfyUI's folder_paths at the workflow's models/ subtree.
+def _configure_folder_paths(
+    workflow_models_dir: Path,
+    workflow_input_dir: Path | None = None,
+    workflow_output_dir: Path | None = None,
+) -> None:
+    """Point ComfyUI's folder_paths at the workflow's models/input/output subtree.
 
     Also calls ``nodes.init_extra_nodes()`` to register comfy_extras nodes
     (Flux2 sampler, custom samplers, upscalers, etc.). Without this call,
@@ -109,6 +113,12 @@ def _configure_folder_paths(workflow_models_dir: Path) -> None:
         except Exception:
             pass
 
+    if workflow_input_dir is not None and workflow_input_dir.exists():
+        folder_paths.set_input_directory(str(workflow_input_dir))
+    if workflow_output_dir is not None:
+        workflow_output_dir.mkdir(parents=True, exist_ok=True)
+        folder_paths.set_output_directory(str(workflow_output_dir))
+
     if not workflow_models_dir.exists():
         return
 
@@ -120,6 +130,9 @@ def _configure_folder_paths(workflow_models_dir: Path) -> None:
 def _load_custom_nodes(workflow_nodes_dir: Path | None) -> None:
     """Load custom node Python files from the workflow's nodes/ directory.
 
+    Handles both the sync (older ComfyUI) and async (newer ComfyUI 0.18+)
+    signatures of ``nodes.load_custom_node``.
+
     Args:
         workflow_nodes_dir: Directory containing custom ``*.py`` node files, or
             ``None`` to skip loading. Silently skips if the directory does not
@@ -127,9 +140,23 @@ def _load_custom_nodes(workflow_nodes_dir: Path | None) -> None:
     """
     if workflow_nodes_dir is None or not workflow_nodes_dir.exists():
         return
+    import asyncio
+    import inspect
+
     import nodes
+
+    loader = nodes.load_custom_node
+    is_async = inspect.iscoroutinefunction(loader)
     for py_file in sorted(workflow_nodes_dir.glob("*.py")):
-        nodes.load_custom_node(str(py_file))
+        if py_file.name == "__init__.py":
+            continue
+        try:
+            if is_async:
+                asyncio.run(loader(str(py_file)))
+            else:
+                loader(str(py_file))
+        except Exception as exc:
+            print(f"[comfyui_runner] warn: failed to load {py_file.name}: {exc}", flush=True)
 
 
 def _install_instrumentation(
@@ -241,6 +268,8 @@ def run(
     workflow_nodes_dir: Path | None,
     run_idx: int,
     out_path: Path,
+    workflow_input_dir: Path | None = None,
+    workflow_output_dir: Path | None = None,
 ) -> None:
     """Run one workflow once on the ComfyUI side and write a RunResult JSON.
 
@@ -257,6 +286,12 @@ def run(
         workflow_nodes_dir: Optional directory of custom ``.py`` node files.
         run_idx: Index of this run (0 = warmup, discarded during aggregation).
         out_path: Destination path for the JSON result file.
+        workflow_input_dir: Optional directory holding input images for
+            ``LoadImage`` nodes. If provided, passed to
+            ``folder_paths.set_input_directory``.
+        workflow_output_dir: Optional directory where ``SaveImage`` nodes
+            should write. If provided, passed to
+            ``folder_paths.set_output_directory``.
     """
     random.seed(42)
     try:
@@ -270,13 +305,24 @@ def run(
     prompt = json.loads(prompt_json.read_text())
     stage_mapping = _load_stages(stages_yaml)
 
-    _configure_folder_paths(workflow_models_dir)
+    _configure_folder_paths(
+        workflow_models_dir,
+        workflow_input_dir=workflow_input_dir,
+        workflow_output_dir=workflow_output_dir,
+    )
     _load_custom_nodes(workflow_nodes_dir)
 
     node_rec, stage_rec = _install_instrumentation(stage_mapping)
 
     import execution
-    executor = execution.PromptExecutor(MockServer(), cache_type=False)
+    # cache_type=False disables the HierarchicalCache, but PromptExecutor
+    # still reads cache_args["ram"] in execute_async to compute a RAM
+    # headroom. Pass a minimal dict to keep it happy.
+    executor = execution.PromptExecutor(
+        MockServer(),
+        cache_type=False,
+        cache_args={"ram": 0.0, "lru": 0},
+    )
 
     reset_gpu_peak()
 
@@ -292,6 +338,17 @@ def run(
             execute_outputs=execute_outputs,
         )
         _try_cuda_sync()
+        # PromptExecutor catches node exceptions internally and sets
+        # self.success = False rather than raising. Surface that as a failure.
+        if getattr(executor, "success", True) is False:
+            status = "failed"
+            # Pull the last execution_error event if present.
+            messages = getattr(executor, "status_messages", []) or []
+            err_events = [m for m in messages if isinstance(m, tuple) and m[0] == "execution_error"]
+            if err_events:
+                error = f"execution_error: {err_events[-1][1]}"
+            else:
+                error = "PromptExecutor reported success=False with no execution_error event"
     except Exception as exc:
         status = "failed"
         error = f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
@@ -341,6 +398,8 @@ def main() -> None:
     upstream_workflow = REPO_ROOT / "workflows" / args.workflow
     models_dir = upstream_workflow / "models"
     nodes_dir = upstream_workflow / "nodes"
+    input_dir = upstream_workflow / "input"
+    output_dir = upstream_workflow / "output"
     run(
         workflow_name=args.workflow,
         prompt_json=prompt_json,
@@ -349,6 +408,8 @@ def main() -> None:
         workflow_nodes_dir=nodes_dir if nodes_dir.exists() else None,
         run_idx=args.run_idx,
         out_path=args.out,
+        workflow_input_dir=input_dir if input_dir.exists() else None,
+        workflow_output_dir=output_dir,
     )
 
 

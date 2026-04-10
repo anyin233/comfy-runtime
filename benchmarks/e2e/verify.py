@@ -81,7 +81,13 @@ def _latest_png_in(directory: Path) -> Path:
     Raises:
         RuntimeError: If no PNG files are found in the directory.
     """
-    pngs = sorted(directory.glob("*.png"), key=lambda p: p.stat().st_mtime)
+    # Exclude hidden files (starting with ".") so the runtime-side PNG
+    # stashed as ``.verify_runtime_*.png`` does not leak into the ComfyUI-side
+    # lookup on the second half of each verification round.
+    pngs = sorted(
+        (p for p in directory.glob("*.png") if not p.name.startswith(".")),
+        key=lambda p: p.stat().st_mtime,
+    )
     if not pngs:
         raise RuntimeError(f"no .png in {directory}")
     return pngs[-1]
@@ -135,26 +141,44 @@ def main() -> int:
     ]
     workflows = [args.workflow] if args.workflow else all_workflows
 
+    import json as _json
     import subprocess
     failures = []
     for wf in workflows:
         output_dir = repo_root / "workflows" / wf / "output"
 
-        print(f"[verify] === {wf} ===")
+        print(f"[verify] === {wf} ===", flush=True)
 
         # Clear previous output so _latest_png_in picks up only the verification run.
         for old in output_dir.glob("*.png"):
             old.unlink()
 
         # Runtime side
+        runtime_json_path = bench_root / "results" / "verify" / f"{wf}_runtime.json"
+        runtime_json_path.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run(
             [str(bench_root / "runtime-env" / ".venv" / "bin" / "python"),
              str(bench_root / "runners" / "runtime_runner.py"),
              "--workflow", wf, "--run-idx", "0",
-             "--out", str(bench_root / "results" / "verify" / f"{wf}_runtime.json")],
-            check=True,
+             "--out", str(runtime_json_path)],
+            check=False,
         )
-        runtime_png = _latest_png_in(output_dir)
+        if not runtime_json_path.exists():
+            print(f"[verify] {wf}: FAIL — runtime subprocess produced no JSON", flush=True)
+            failures.append(wf)
+            continue
+        runtime_result = _json.loads(runtime_json_path.read_text())
+        if runtime_result.get("status") != "ok":
+            print(f"[verify] {wf}: FAIL — runtime subprocess failed:", flush=True)
+            print(runtime_result.get("error", "")[:2000])
+            failures.append(wf)
+            continue
+        try:
+            runtime_png = _latest_png_in(output_dir)
+        except RuntimeError as e:
+            print(f"[verify] {wf}: FAIL — runtime produced no PNG: {e}", flush=True)
+            failures.append(wf)
+            continue
         runtime_img = load_image(runtime_png)
         runtime_stats = compute_stats(runtime_img)
 
@@ -163,22 +187,38 @@ def main() -> int:
         runtime_png.rename(runtime_preserved)
 
         # ComfyUI side
+        comfyui_json_path = bench_root / "results" / "verify" / f"{wf}_comfyui.json"
         subprocess.run(
             [str(bench_root / "comfyui-env" / ".venv" / "bin" / "python"),
              str(bench_root / "runners" / "comfyui_runner.py"),
              "--workflow", wf, "--run-idx", "0",
-             "--out", str(bench_root / "results" / "verify" / f"{wf}_comfyui.json")],
-            check=True,
+             "--out", str(comfyui_json_path)],
+            check=False,
         )
-        comfyui_png = _latest_png_in(output_dir)
+        if not comfyui_json_path.exists():
+            print(f"[verify] {wf}: FAIL — comfyui subprocess produced no JSON", flush=True)
+            failures.append(wf)
+            continue
+        comfyui_result = _json.loads(comfyui_json_path.read_text())
+        if comfyui_result.get("status") != "ok":
+            print(f"[verify] {wf}: FAIL — comfyui subprocess failed:", flush=True)
+            print(comfyui_result.get("error", "")[:2000])
+            failures.append(wf)
+            continue
+        try:
+            comfyui_png = _latest_png_in(output_dir)
+        except RuntimeError as e:
+            print(f"[verify] {wf}: FAIL — comfyui produced no PNG: {e}", flush=True)
+            failures.append(wf)
+            continue
         comfyui_img = load_image(comfyui_png)
         comfyui_stats = compute_stats(comfyui_img)
 
         ok, reason = compare_stats(runtime_stats, comfyui_stats, rel_tol=args.rel_tol)
         if ok:
-            print(f"[verify] {wf}: OK ({reason})")
+            print(f"[verify] {wf}: OK ({reason})", flush=True)
         else:
-            print(f"[verify] {wf}: FAIL ({reason})")
+            print(f"[verify] {wf}: FAIL ({reason})", flush=True)
             print(f"  runtime: mean={runtime_stats.mean:.3f} std={runtime_stats.std:.3f}")
             print(f"  comfyui: mean={comfyui_stats.mean:.3f} std={comfyui_stats.std:.3f}")
             failures.append(wf)
