@@ -21,6 +21,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
 
+# NOTE: flux2_klein_text_to_image is excluded by default because the
+# compat layer doesn't yet ship the full Flux.2 text-encoder / transformer
+# port — the CLIPLoader lumina2/flux2 types are stubs, and the workflow's
+# custom nodes expect ``comfy_api_nodes`` which is out of scope for v1.0.
+# Pass ``--workflow flux2_klein_text_to_image`` explicitly to attempt it,
+# but the runtime side will fail until the Flux.2 loader is implemented.
 ALL_WORKFLOWS = [
     "sd15_text_to_image",
     "img2img",
@@ -28,7 +34,6 @@ ALL_WORKFLOWS = [
     "hires_fix",
     "area_composition",
     "esrgan_upscale",
-    "flux2_klein_text_to_image",
 ]
 
 DEFAULT_RUNS_PER_SIDE = 4   # 1 warmup + 3 timed

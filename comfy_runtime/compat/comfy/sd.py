@@ -19,7 +19,15 @@ logger = logging.getLogger(__name__)
 
 
 class CLIPType(enum.Enum):
-    """Enumeration of supported CLIP text encoder architectures."""
+    """Enumeration of supported CLIP text encoder architectures.
+
+    Only ``SD1`` / ``SDXL`` / ``FLUX`` have real loaders in the compat
+    layer at v1.0; the other members exist so the CLIPLoader type_map
+    dict can reference them without AttributeError, and so
+    import-compat stubs for newer architectures (chroma, hidream,
+    lumina2, flux2, long_clipl) can be wired up in a future minor
+    release without touching the enum.
+    """
 
     SD1 = 1
     SD2 = 2
@@ -33,6 +41,11 @@ class CLIPType(enum.Enum):
     PIXART = 10
     WAN = 11
     HUNYUAN_DIT = 12
+    LUMINA2 = 13
+    CHROMA = 14
+    HIDREAM = 15
+    FLUX2 = 16
+    LONG_CLIPL = 17
 
 
 # ---------------------------------------------------------------------------

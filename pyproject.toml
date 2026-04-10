@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "comfy-runtime"
-version = "0.3.1"
+version = "1.0.0"
 description = "Minimal ComfyUI runtime for deploying custom nodes as microservices"
 readme = "README.md"
 license = "MIT"
@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 authors = [{name = "anyin233", email = "cydia2001@duck.com"}]
 keywords = ["comfyui", "runtime", "nodes", "microservice", "inference"]
 classifiers = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.10",
