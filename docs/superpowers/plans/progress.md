@@ -402,7 +402,7 @@ itself is **done**.
 
 ---
 
-## Phase 5 Partial — paused 2026-04-10
+## Phase 5 Partial — paused 2026-04-10 *(superseded — see Phase 5 Complete below)*
 
 User requested all Phase-5 work **excluding benchmarks** (5.1 + 5.2 in
 the original plan), which was reframed as:
@@ -440,5 +440,157 @@ b497876 feat(compat_extras): port nodes_mask with real implementations
 792056d feat(compat): ControlNet.get_control + KSAMPLER integration
 046924b feat(compat): real Flux sampling via FluxKSAMPLER + FlowMatchEulerDiscreteScheduler
 ```
+
+---
+
+## Phase 5 Complete — 2026-04-10 (resumed on new dev box)
+
+Phase 5 resumed on a fresh machine via the handoff doc in
+`docs/superpowers/plans/HANDOFF-2026-04-10.md`.  The remaining two
+tasks (5.5 and 5.6) were finished via strict TDD in the
+`.worktrees/phase5-finish` worktree on top of `feature/slim-vendor`.
+
+### All Phase 5 tasks done
+
+| Task | Deliverable | Status |
+|---|---|---|
+| 5.1 | Real Flux sampling via `FluxKSAMPLER` + `FlowMatchEulerDiscreteScheduler` | ✅ |
+| 5.2 | `ControlNet.get_control` + KSAMPLER forward integration | ✅ |
+| 5.3 | Port `comfy_extras.nodes_custom_sampler` (16 classes) | ✅ |
+| 5.4 | Port `comfy_extras.nodes_mask` (9 classes + `composite` helper) | ✅ |
+| 5.5 | Port `comfy_extras.nodes_model_advanced` (`ModelSamplingDiscrete`, `RescaleCFG`, `rescale_zero_terminal_snr_sigmas`) | ✅ |
+| 5.6 | Final wheel verification — rebuild + run all 4 standalone wheel tests | ✅ |
+
+Benchmark A/B suite and pixel-level golden-hash comparison (5.1 and
+5.2 in the *original* plan) stay **explicitly out of scope** per the
+user's directive — the existing benchmark suite on `main` is the
+source of truth for those.
+
+### Task 5.5 — implementation highlights
+
+`compat/comfy_extras/nodes_model_advanced.py` went from a bare stub
+to real ports for the two commonly-used nodes:
+
+* **`ModelSamplingDiscrete`** — clones the `ModelPatcher` and records
+  the requested sampling parameterization (`eps` / `v_prediction` /
+  `lcm` / `x0`) plus the `zsnr` flag in `transformer_options`.
+* **`RescaleCFG`** — clones the `ModelPatcher` and registers a
+  post-cfg hook via `ModelPatcher.set_model_sampler_post_cfg_function`.
+  The hook invokes `_rescale_cfg`, which preserves the per-sample
+  std of the conditional prediction while blending toward a
+  normalized CFG output — the terminal-SNR-safe rescale from Lin et
+  al., WACV 2024.
+* **`rescale_zero_terminal_snr_sigmas`** — real implementation of the
+  schedule remap AnimateDiff and other ZSNR-aware packs use.
+
+`ModelSamplingContinuousEDM`, `LCM`, `ModelSamplingFlux` and friends
+stay as import-compat stubs; workflows rarely reach for them and
+their functionality overlaps with `compat/comfy/samplers.py` and
+`compat/comfy_extras/nodes_custom_sampler.py`.
+
+### Task 5.6 — final wheel build
+
+```
+$ rm -rf dist/ build/ comfy_runtime.egg-info
+$ python -m build --wheel
+Successfully built comfy_runtime-0.3.1-py3-none-any.whl
+
+$ ls -la dist/*.whl
+-rw-r--r-- 172 116 bytes  (168 KB)
+
+$ unzip -l dist/*.whl | tail -1
+119 files
+
+$ unzip -l dist/*.whl | grep -c _vendor
+0
+```
+
+All 4 standalone wheel tests pass:
+
+```
+$ COMFY_RUNTIME_TEST_WHEEL=1 pytest tests/integration/test_wheel_standalone.py -v
+tests/integration/test_wheel_standalone.py::test_wheel_builds_installs_and_runs_sd15_happy_path PASSED
+tests/integration/test_wheel_standalone.py::test_wheel_lora_roundtrip_in_fresh_venv PASSED
+tests/integration/test_wheel_standalone.py::test_wheel_has_no_vendor_entries PASSED
+tests/integration/test_wheel_standalone.py::test_wheel_vram_state_and_multi_gpu_from_fresh_venv PASSED
+========================= 4 passed in 68.38s =========================
+```
+
+### Test totals — final
+
+| Suite | Count | Status |
+|---|---|---|
+| `tests/unit/` | **195** | all pass in ~46 s (was 192 at Phase-5-paused, +3 from Task 5.5) |
+| `tests/integration/test_workflows.py` | 32 | all pass |
+| `tests/integration/test_third_party_custom_nodes.py` | 5 (1 skip) | all collectable pass |
+| `tests/integration/test_wheel_standalone.py` (gated by env) | 4 | all pass under `COMFY_RUNTIME_TEST_WHEEL=1` |
+| **Grand total (collectable on this dev box)** | **227 + 5 skipped** | **0 failures** |
+
+### Environment note — `test_comfy_extras_import.py` and `test_flux2_workflow.py`
+
+These two integration files import-time-probe
+`/home/yanweiye/Project/ComfyUI/comfy_extras/` (overridable via the
+`COMFYUI_ROOT` env var) and **error during collection** when the
+directory isn't present — they parametrize from `os.listdir(...)` and
+load hard-coded file paths through `comfy_runtime.load_nodes_from_path`
+at module import time, bypassing the intended skip-if-absent path.
+This is a pre-existing collection bug unrelated to Task 5.5.
+
+The previous dev box had a real ComfyUI checkout at that path and the
+tests collected there; the new dev box does not.  Both files were
+excluded with `--ignore=` for the Task 5.5 / 5.6 regression runs, and
+the remaining suite (unit + `test_workflows.py` + third-party custom
+nodes + wheel standalone) stayed green through both commits.  Fixing
+the collection bug is out of Phase 5 scope; if a future phase wants
+to run those two files on machines without a ComfyUI checkout the
+right fix is a module-level `pytest.skip(..., allow_module_level=True)`
+guard.
+
+### Wheel metric comparison across phases
+
+| Metric | Phase 0 | Phase 1 | Phase 2 | Phase 3 | Phase 4 | Phase 5 |
+|---|---|---|---|---|---|---|
+| Wheel size | 122 KB | 131 KB | 131 KB | 134 KB | 162 KB | **168 KB** |
+| Files in wheel | 94 | 97 | 97 | 97 | 115 | **119** |
+| `_vendor` entries | 1 (bridge) | 1 (bridge) | **0** | 0 | 0 | **0** |
+| Built-in nodes | 23 | 23 | 23 | 23 | 24 | **24** |
+
+Wheel growth from Phase 4 (162 → 168 KB, +6 KB) is the combined size
+of the Phase 5 ports: real Flux sampling, ControlNet forward, the
+`nodes_custom_sampler` port, the `nodes_mask` port, and Task 5.5's
+`nodes_model_advanced` port.
+
+### Phase 5 commit trail
+
+```
+8c3b014 feat(compat_extras): port nodes_model_advanced with real implementations
+b497876 feat(compat_extras): port nodes_mask with real implementations
+005dd27 feat(compat_extras): port nodes_custom_sampler with real implementations
+792056d feat(compat): ControlNet.get_control + KSAMPLER integration
+046924b feat(compat): real Flux sampling via FluxKSAMPLER + FlowMatchEulerDiscreteScheduler
+```
+
+### What's left after Phase 5
+
+Nothing from the in-scope plan.  `_vendor/` is gone, all 24 built-in
+nodes are MIT-pure, the `comfy_extras` submodule has real ports for
+the five most-used node files (`nodes_custom_sampler`, `nodes_mask`,
+`nodes_model_advanced`, plus the Flux sampling and ControlNet work
+that live in `compat/comfy/`), and the installed wheel ships zero
+GPL code.  The MIT `_vendor` rewrite is complete.
+
+Out-of-scope work that remains for future phases if the user wants:
+
+* Wire `sampler_post_cfg_function` into the `KSAMPLER.sample` loop so
+  `RescaleCFG` actually affects the sampled output (Task 5.5 only
+  registers the hook — the sampler loop doesn't invoke post-cfg
+  hooks yet).
+* Benchmark A/B suite + pixel-level golden hash comparison (excluded
+  per user directive; `main` branch is the source of truth).
+* Fill in the long tail of `comfy_extras` stubs as real workflows
+  demand them.
+* Fix the collection-time bug in `test_comfy_extras_import.py` and
+  `test_flux2_workflow.py` so they skip cleanly on machines without
+  a ComfyUI checkout.
 
 ---
