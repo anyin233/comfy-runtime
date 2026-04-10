@@ -661,15 +661,26 @@ class LoadImage:
         import folder_paths
 
         image_path = folder_paths.get_annotated_filepath(image)
-        img = Image.open(image_path).convert("RGBA")
-        image_np = np.array(img).astype(np.float32) / 255.0
-        image_tensor = torch.from_numpy(image_np)[None,]
-        mask = torch.zeros(
-            (1, image_np.shape[0], image_np.shape[1]), dtype=torch.float32
+        img = Image.open(image_path)
+        has_alpha = img.mode in ("RGBA", "LA") or (
+            img.mode == "P" and "transparency" in img.info
         )
-        if image_np.shape[2] == 4:
-            mask = 1.0 - torch.from_numpy(image_np[:, :, 3])[None,]
-        return (image_tensor[:, :, :, :3], mask)
+        if has_alpha:
+            img = img.convert("RGBA")
+            arr = np.asarray(img, dtype=np.uint8)
+            rgb = arr[:, :, :3].astype(np.float32) / 255.0
+            image_tensor = torch.from_numpy(np.ascontiguousarray(rgb))[None, ...]
+            alpha = arr[:, :, 3].astype(np.float32) / 255.0
+            mask = 1.0 - torch.from_numpy(alpha)[None, ...]
+        else:
+            img = img.convert("RGB")
+            arr = np.asarray(img, dtype=np.uint8)
+            rgb = arr.astype(np.float32) / 255.0
+            image_tensor = torch.from_numpy(np.ascontiguousarray(rgb))[None, ...]
+            mask = torch.zeros(
+                (1, arr.shape[0], arr.shape[1]), dtype=torch.float32
+            )
+        return (image_tensor, mask)
 
 
 class SaveImage:
@@ -702,9 +713,17 @@ class SaveImage:
             )
         )
         results = []
-        for batch_number, image in enumerate(images):
-            i = 255.0 * image.cpu().numpy()
-            img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
+        # Batch-level .cpu() transfer: clamp/scale/cast happen as a single
+        # fused op, then iterate numpy views for PIL conversion. Uses
+        # non-in-place ops so the caller's tensor is untouched.
+        batch_u8 = (
+            images.detach()
+            .clamp(0.0, 1.0)
+            .mul(255.0)
+            .to(dtype=torch.uint8, device="cpu")
+        ).numpy()
+        for batch_number in range(batch_u8.shape[0]):
+            img = Image.fromarray(batch_u8[batch_number])
             metadata = None
             from comfy.cli_args import args
 
