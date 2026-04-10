@@ -401,3 +401,44 @@ These are extensions on top of a working MIT base — the rewrite
 itself is **done**.
 
 ---
+
+## Phase 5 Partial — paused 2026-04-10
+
+User requested all Phase-5 work **excluding benchmarks** (5.1 + 5.2 in
+the original plan), which was reframed as:
+
+  * 5.1 — real Flux sampling (FluxKSAMPLER + FlowMatchEulerDiscreteScheduler)
+  * 5.2 — ControlNet forward integration (get_control + KSAMPLER hook)
+  * 5.3 — port comfy_extras.nodes_custom_sampler real implementations
+  * 5.4 — port comfy_extras.nodes_mask real implementations
+  * 5.5 — port comfy_extras.nodes_model_advanced (RescaleCFG, ModelSamplingDiscrete)
+  * 5.6 — final wheel verification with all Phase 5 changes
+
+**Done:** 5.1, 5.2, 5.3, 5.4
+
+**Pending:** 5.5, 5.6
+
+The branch was paused mid-Phase-5 so the dev box could be handed
+over.  Full handoff context is in
+`docs/superpowers/plans/HANDOFF-2026-04-10.md` — it has concrete
+code sketches and test skeletons for the remaining two tasks.
+
+### Tests at handoff time
+
+| Suite | Count | Status |
+|---|---|---|
+| `tests/unit/` | **207** | all pass |
+| `tests/integration/` (sans wheel-gated) | 190 | all pass |
+| `tests/integration/test_wheel_standalone.py` | 4 | all pass under `COMFY_RUNTIME_TEST_WHEEL=1` |
+| **Grand total** | **397 + 4 skipped** | **0 failures** |
+
+### Phase 5 commits so far
+
+```
+b497876 feat(compat_extras): port nodes_mask with real implementations
+005dd27 feat(compat_extras): port nodes_custom_sampler with real implementations
+792056d feat(compat): ControlNet.get_control + KSAMPLER integration
+046924b feat(compat): real Flux sampling via FluxKSAMPLER + FlowMatchEulerDiscreteScheduler
+```
+
+---
