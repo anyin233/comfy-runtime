@@ -27,6 +27,96 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+_LOWVRAM_SCRIPT = r'''
+"""Standalone LOW_VRAM offload test — proves ComfyUI optimization parity
+(tiered VRAM state + partially_load + per-sub-model device pinning) works
+from the installed wheel with no source tree access."""
+import torch
+import torch.nn as nn
+
+import comfy_runtime
+assert "site-packages" in comfy_runtime.__file__
+comfy_runtime.configure()
+
+from comfy_runtime.compat.comfy import model_management as mm
+from comfy_runtime.compat.comfy.model_management import (
+    VRAMState,
+    load_models_gpu,
+    unload_all_models,
+)
+from comfy_runtime.compat.comfy.model_patcher import ModelPatcher
+
+
+class _Seven(nn.Module):
+    """700-byte model: a(400) + b(200) + c(100)."""
+
+    def __init__(self):
+        super().__init__()
+        self.a = nn.Parameter(torch.zeros(100))
+        self.b = nn.Parameter(torch.zeros(50))
+        self.c = nn.Parameter(torch.zeros(25))
+
+
+def _bytes_on(model, device_type):
+    return sum(
+        p.nelement() * p.element_size()
+        for p in model.parameters()
+        if p.device.type == device_type
+    )
+
+
+# --- Scenario 1: NORMAL_VRAM (full load) -----------------------------
+model = _Seven()
+patcher = ModelPatcher(
+    model,
+    load_device=torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu"),
+    offload_device=torch.device("cpu"),
+)
+mm.current_loaded_models = []
+mm.vram_state = VRAMState.NORMAL_VRAM
+load_models_gpu([patcher])
+assert patcher.current_loaded_size() == 700, f"NORMAL_VRAM: {patcher.current_loaded_size()}"
+
+# --- Scenario 2: LOW_VRAM with 600-byte budget -----------------------
+unload_all_models()
+model2 = _Seven()
+patcher2 = ModelPatcher(
+    model2,
+    load_device=torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu"),
+    offload_device=torch.device("cpu"),
+)
+mm.vram_state = VRAMState.LOW_VRAM
+load_models_gpu([patcher2], minimum_memory_required=600)
+assert patcher2.current_loaded_size() == 600, f"LOW_VRAM: {patcher2.current_loaded_size()}"
+
+# --- Scenario 3: NO_VRAM (all on CPU) --------------------------------
+unload_all_models()
+model3 = _Seven()
+patcher3 = ModelPatcher(
+    model3,
+    load_device=torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu"),
+    offload_device=torch.device("cpu"),
+)
+mm.vram_state = VRAMState.NO_VRAM
+load_models_gpu([patcher3])
+assert patcher3.current_loaded_size() == 0, f"NO_VRAM: {patcher3.current_loaded_size()}"
+
+# --- Scenario 4: multi-GPU device assignment ------------------------
+mm.set_device_assignment(
+    unet=torch.device("cpu"),
+    text_encoder=torch.device("cpu"),
+    vae=torch.device("cpu"),
+)
+assert mm.vae_device() == torch.device("cpu")
+assert mm.text_encoder_device() == torch.device("cpu")
+assert mm.unet_inital_load_device(0, torch.float32) == torch.device("cpu")
+mm.set_device_assignment()  # reset
+
+unload_all_models()
+print("OK lowvram-parity")
+'''
+
+
 _LORA_SCRIPT = r'''
 """Standalone LoRA roundtrip test — runs inside a fresh venv with only
 the installed comfy_runtime wheel on sys.path.  Proves ModelPatcher
@@ -253,3 +343,17 @@ def test_wheel_has_no_vendor_entries():
             names = zf.namelist()
         vendor_entries = [n for n in names if "_vendor" in n]
         assert vendor_entries == [], f"Wheel has _vendor entries: {vendor_entries}"
+
+
+def test_wheel_vram_state_and_multi_gpu_from_fresh_venv():
+    """LOW_VRAM / NO_VRAM tiered offload + multi-GPU pinning via
+    set_device_assignment runs from the installed wheel."""
+    with tempfile.TemporaryDirectory() as tmp:
+        python = _build_wheel_and_install(tmp)
+        result = _run_in_venv(python, _LOWVRAM_SCRIPT, cwd=tmp)
+        assert result.returncode == 0, (
+            f"Lowvram parity test failed:\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+        assert "OK lowvram-parity" in result.stdout

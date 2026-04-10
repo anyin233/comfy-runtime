@@ -216,3 +216,84 @@ installed wheel with no GPL code on the host.
 `NotImplementedError` pointing at Task 2.5.
 
 ---
+
+## Phase 3 Complete — 2026-04-10 (optimization parity)
+
+### Unit tests
+
+| Metric | Value |
+|---|---|
+| Tests passing | **128** (+28 from Phase 2's 100) |
+| New test files | `test_mit_partial_load.py` (11), `test_mit_vram_state.py` (8), `test_mit_multi_gpu.py` (9) |
+| Run time | ~24 s |
+
+### Methods implemented in Phase 3
+
+**ModelPatcher (lowvram primitive):**
+* `partially_load(device, extra_memory)` — biggest-first layer streaming
+* `partially_unload(device, extra_memory)` — smallest-first eviction
+* `current_loaded_size()` — resident byte accounting
+
+**LoadedModel (VRAM state wiring):**
+* `model_load(lowvram_model_memory, ...)` — routes through
+  `ModelPatcher.partially_load` with the budget from the caller
+* `model_unload(memory_to_free, ...)` — routes through `partially_unload`
+
+**load_models_gpu (state machine):**
+* Computes per-model byte budget from `vram_state`:
+  * `HIGH_VRAM` / `NORMAL_VRAM` / `SHARED` → full load
+  * `LOW_VRAM` → `minimum_memory_required` budget, fallback to `model_size/2`
+  * `NO_VRAM` / `DISABLED` → budget=1 (nothing fits)
+  * `force_full_load=True` → bypass state dispatch entirely
+
+**Multi-GPU device routing:**
+* `set_device_assignment(unet=, text_encoder=, vae=, clip_vision=, controlnet=)`
+  — pins sub-models to explicit devices
+* `get_device_assignment(slot)`
+* `get_device_list()` — CUDA-visible-devices-honoring device enumeration
+* `text_encoder_device()` / `vae_device()` / `unet_inital_load_device()`
+  now consult the assignment before falling back to the single-device defaults
+
+### Wheel metrics — Phase 3
+
+| Metric | Phase 2 | Phase 3 | Δ |
+|---|---|---|---|
+| Wheel size | 131 KB | **134 KB** | +3 KB |
+| Files in wheel | 97 | **97** | 0 |
+| `_vendor` entries | 0 | **0** | 0 |
+
+### Standalone wheel smoke tests — Phase 3
+
+**4 tests all PASSED in 35.79 s:**
+
+1. `test_wheel_builds_installs_and_runs_sd15_happy_path` — SD1.5 txt2img
+2. `test_wheel_lora_roundtrip_in_fresh_venv` — LoRA apply/unpatch
+3. `test_wheel_has_no_vendor_entries` — zip inventory check
+4. `test_wheel_vram_state_and_multi_gpu_from_fresh_venv` — **NEW**:
+   * NORMAL_VRAM full load → 700/700 bytes resident
+   * LOW_VRAM with 600-byte budget → 600/700 bytes resident
+   * NO_VRAM → 0/700 bytes resident
+   * Multi-GPU pin `unet=cpu`, `text_encoder=cpu`, `vae=cpu` routing verified
+
+All through the installed wheel with zero source-tree access and
+zero GPL code.
+
+### ComfyUI optimization parity — status
+
+| Capability | Status |
+|---|---|
+| Weight hot-swap (LoRA apply + ModelPatcher backup/restore) | ✅ Phase 2 |
+| Tiered VRAM offload (HIGH / NORMAL / LOW / NO / DISABLED) | ✅ Phase 3 |
+| Per-sub-model device pinning (multi-GPU) | ✅ Phase 3 |
+| Partial residency with memory budgeting | ✅ Phase 3 |
+| fp8 weight loading (e4m3fn / e5m2) | ❌ Task 3.4 deferred |
+| ComfyUI hook chain (HookGroup semantics) | ⚠️ compat stub, full parity Task 3.5 |
+| Stream-based forward-pass hooks (accelerate cpu_offload) | ❌ deferred — the current partially_load strategy is static placement |
+
+The current optimization parity is **"sufficient for ComfyUI workflows
+that use weight hot-swap + LOW_VRAM + multi-GPU pinning"**.  The
+deferred pieces (fp8 cast, forward-pass streaming hooks, full
+HookGroup) are optimizations **on top of** the parity surface and
+don't block any production workflow.
+
+---
