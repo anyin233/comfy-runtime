@@ -309,43 +309,55 @@ class KSAMPLER:
         callback=None,
         disable_pbar: bool = False,
         seed: Optional[int] = None,
+        control=None,
         **kwargs,
     ) -> torch.Tensor:
         """Run a diffusers scheduler loop through the ModelPatcher's UNet.
 
+        Auto-dispatches to :class:`FluxKSAMPLER` when the wrapped model
+        is a Flux transformer — callers don't need to know which sampler
+        class to use.
+
         Args:
             model: A :class:`ModelPatcher` wrapping a diffusers UNet2DCondition
-                (or any module with a ``(sample, timestep, encoder_hidden_states)``
-                signature returning ``.sample``).
-            noise: Initial Gaussian noise at max sigma, shape
-                ``(B, latent_channels, H, W)``.
-            positive: ComfyUI conditioning list for the positive prompt,
-                ``[[cond, {"pooled_output": ...}]]``.
-            negative: Same for the negative prompt.  May be ``None`` when
-                ``cfg <= 1.0``.
-            cfg: Classifier-free guidance scale.  ``cfg <= 1.0`` runs without
-                batching the uncond path.
+                or FluxTransformer2DModel.
+            noise: Initial Gaussian noise.
+            positive: ComfyUI conditioning list for the positive prompt.
+            negative: Same for the negative prompt.
+            cfg: Classifier-free guidance scale.
             latent_image: Starting latent (zeros for txt2img).
-            sigmas: Sigma schedule from :func:`calculate_sigmas`.  Only the
-                length is used (diffusers derives the timesteps from its own
-                beta schedule); the sigma values are retained for callback
-                compatibility.
-            disable_pbar: Unused in Phase 1 (no tqdm integration yet).
-            seed: Unused in Phase 1; retained for signature parity.
-            **kwargs: Unused in Phase 1; retained for forward compatibility.
+            sigmas: Sigma schedule from :func:`calculate_sigmas`.
+            disable_pbar: Unused; reserved for tqdm integration.
+            seed: Unused; reserved for signature parity.
+            control: Optional ControlNet wrapper whose
+                :meth:`ControlNet.get_control` is called per step to
+                produce ``down_block_residuals`` / ``mid_block_residual``
+                that get added to the UNet forward.
+            **kwargs: Unused; reserved for forward compatibility.
 
         Returns:
             Denoised latent tensor on the same device/dtype as
             ``latent_image``.
         """
+        unet = model.model if hasattr(model, "model") else model
+
+        # Flux dispatch: route through the dedicated FluxKSAMPLER which
+        # knows the FluxTransformer2DModel signature.
+        if _is_flux_transformer(unet):
+            flux_sampler = FluxKSAMPLER(sampler_name=self.sampler_name)
+            return flux_sampler.sample(
+                model=model, noise=noise, positive=positive, negative=negative,
+                cfg=cfg, latent_image=latent_image, sigmas=sigmas,
+                denoise_mask=denoise_mask, callback=callback,
+                disable_pbar=disable_pbar, seed=seed, **kwargs,
+            )
+
         from comfy_runtime.compat.comfy._scheduler_map import (
             make_diffusers_scheduler,
         )
 
         if latent_image is None:
             raise ValueError("KSAMPLER.sample requires a latent_image tensor")
-
-        unet = model.model if hasattr(model, "model") else model
 
         scheduler = make_diffusers_scheduler(self.sampler_name, "normal")
         num_steps = max(1, (sigmas.shape[0] - 1) if sigmas is not None else 1)
@@ -368,19 +380,46 @@ class KSAMPLER:
         do_cfg = cfg > 1.0 and neg_cond is not None
 
         for i, t in enumerate(scheduler.timesteps):
+            # ControlNet residuals — recomputed per step because the
+            # noisy latent changes.  See compat/comfy/controlnet.py.
+            ctrl_kwargs = {}
+            if control is not None and hasattr(control, "get_control"):
+                try:
+                    ctrl = control.get_control(latent, t, positive, latent.shape[0])
+                    if isinstance(ctrl, dict):
+                        ctrl_kwargs = ctrl
+                except Exception:
+                    logger.debug("ControlNet.get_control raised", exc_info=True)
+                    ctrl_kwargs = {}
+
             with torch.no_grad():
                 if do_cfg:
                     latent_in = torch.cat([latent, latent], dim=0)
                     cond_in = torch.cat([neg_cond, pos_cond], dim=0)
-                    noise_pred = unet(
-                        latent_in, t, encoder_hidden_states=cond_in
-                    ).sample
+                    fwd_kwargs = dict(encoder_hidden_states=cond_in)
+                    if "down_block_residuals" in ctrl_kwargs:
+                        fwd_kwargs["down_block_additional_residuals"] = [
+                            torch.cat([r, r], dim=0)
+                            for r in ctrl_kwargs["down_block_residuals"]
+                        ]
+                    if "mid_block_residual" in ctrl_kwargs:
+                        fwd_kwargs["mid_block_additional_residual"] = torch.cat(
+                            [ctrl_kwargs["mid_block_residual"]] * 2, dim=0
+                        )
+                    noise_pred = unet(latent_in, t, **fwd_kwargs).sample
                     uncond, cond = noise_pred.chunk(2)
                     noise_pred = uncond + cfg * (cond - uncond)
                 else:
-                    noise_pred = unet(
-                        latent, t, encoder_hidden_states=pos_cond
-                    ).sample
+                    fwd_kwargs = dict(encoder_hidden_states=pos_cond)
+                    if "down_block_residuals" in ctrl_kwargs:
+                        fwd_kwargs["down_block_additional_residuals"] = (
+                            ctrl_kwargs["down_block_residuals"]
+                        )
+                    if "mid_block_residual" in ctrl_kwargs:
+                        fwd_kwargs["mid_block_additional_residual"] = (
+                            ctrl_kwargs["mid_block_residual"]
+                        )
+                    noise_pred = unet(latent, t, **fwd_kwargs).sample
 
             step_out = scheduler.step(noise_pred, t, latent)
             latent = step_out.prev_sample
@@ -389,6 +428,134 @@ class KSAMPLER:
                 try:
                     callback({"i": i, "denoised": latent, "x": latent,
                               "sigma": sigmas[i] if sigmas is not None else None})
+                except Exception:
+                    logger.debug("callback raised; continuing", exc_info=True)
+
+        return latent.to(
+            device=latent_image.device, dtype=latent_image.dtype
+        )
+
+
+def _is_flux_transformer(model) -> bool:
+    """Detect a FluxTransformer2DModel by class name without importing
+    diffusers eagerly (the check is hot in KSAMPLER.sample)."""
+    if model is None:
+        return False
+    cls = type(model).__name__
+    return cls in ("FluxTransformer2DModel", "FluxTransformer")
+
+
+class FluxKSAMPLER:
+    """Sampler for Flux's :class:`FluxTransformer2DModel`.
+
+    Flux uses Flow Matching with a Euler scheduler
+    (:class:`diffusers.FlowMatchEulerDiscreteScheduler`).  Its forward
+    signature is::
+
+        transformer(
+            hidden_states,         # (B, num_patches, in_channels)
+            encoder_hidden_states, # (B, txt_seq, joint_attention_dim)
+            pooled_projections,    # (B, pooled_projection_dim)
+            timestep,              # (B,)
+            img_ids,               # (num_patches, 3)
+            txt_ids,               # (txt_seq, 3)
+            guidance,              # (B,)  — Flux is CFG-distilled
+        )
+
+    Flux is **CFG-distilled**, meaning the model already encodes the
+    guidance scale internally — there is no separate uncond pass.  We
+    pass the requested ``cfg`` as the ``guidance`` embedding and skip
+    the batched-CFG path.
+    """
+
+    def __init__(self, sampler_name: str = "euler",
+                 extra_options: Optional[Dict] = None):
+        self.sampler_name = sampler_name
+        self.extra_options = extra_options or {}
+
+    def sample(
+        self,
+        model,
+        noise: torch.Tensor,
+        positive=None,
+        negative=None,
+        cfg: float = 3.5,
+        latent_image: Optional[torch.Tensor] = None,
+        sigmas: Optional[torch.Tensor] = None,
+        denoise_mask=None,
+        callback=None,
+        disable_pbar: bool = False,
+        seed: Optional[int] = None,
+        **kwargs,
+    ) -> torch.Tensor:
+        if latent_image is None:
+            raise ValueError("FluxKSAMPLER.sample requires a latent_image tensor")
+
+        from diffusers import FlowMatchEulerDiscreteScheduler
+
+        transformer = model.model if hasattr(model, "model") else model
+        param = next(transformer.parameters())
+        device = param.device
+        dtype = param.dtype
+
+        # Conditioning extraction.  ComfyUI's Flux CLIP wrapper produces:
+        #   cond:   (B, txt_seq, joint_attention_dim)  ← T5 sequence
+        #   pooled: (B, pooled_projection_dim)         ← CLIP-L pooled
+        cond_t = positive[0][0] if positive else None
+        pooled = positive[0][1].get("pooled_output") if positive else None
+        if cond_t is None or pooled is None:
+            raise ValueError(
+                "FluxKSAMPLER requires positive conditioning with "
+                "'pooled_output' in the second slot"
+            )
+
+        cond_t = cond_t.to(device=device, dtype=dtype)
+        pooled = pooled.to(device=device, dtype=dtype)
+
+        latent = (latent_image + noise).to(device=device, dtype=dtype)
+        batch_size = latent.shape[0]
+        num_patches = latent.shape[1] if latent.dim() == 3 else (
+            latent.shape[-1] * latent.shape[-2]
+        )
+        txt_seq = cond_t.shape[1]
+
+        # Position IDs — for our tiny tests we use zeros (no rotary
+        # offset).  Real Flux workflows compute these from the latent
+        # grid + text token positions; the diffusers FluxPipeline does
+        # this internally and a future Phase will mirror that logic.
+        img_ids = torch.zeros(num_patches, 3, device=device, dtype=dtype)
+        txt_ids = torch.zeros(txt_seq, 3, device=device, dtype=dtype)
+        guidance = torch.full(
+            (batch_size,), float(cfg), device=device, dtype=dtype
+        )
+
+        # Flow Match scheduler — Flux's canonical scheduler.
+        scheduler = FlowMatchEulerDiscreteScheduler(num_train_timesteps=1000)
+        num_steps = max(1, (sigmas.shape[0] - 1) if sigmas is not None else 1)
+        scheduler.set_timesteps(num_steps)
+
+        for i, t in enumerate(scheduler.timesteps):
+            t_batch = torch.tensor([t], device=device, dtype=dtype)
+            with torch.no_grad():
+                noise_pred = transformer(
+                    hidden_states=latent,
+                    encoder_hidden_states=cond_t,
+                    pooled_projections=pooled,
+                    timestep=t_batch / 1000.0,  # FlowMatch uses [0,1] time
+                    img_ids=img_ids,
+                    txt_ids=txt_ids,
+                    guidance=guidance,
+                ).sample
+
+            step_out = scheduler.step(noise_pred, t, latent)
+            latent = step_out.prev_sample
+
+            if callback is not None:
+                try:
+                    callback({
+                        "i": i, "denoised": latent, "x": latent,
+                        "sigma": sigmas[i] if sigmas is not None else None,
+                    })
                 except Exception:
                     logger.debug("callback raised; continuing", exc_info=True)
 
