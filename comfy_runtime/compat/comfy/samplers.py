@@ -185,73 +185,163 @@ def calculate_sigmas(model_sampling, scheduler_name: str, steps: int) -> torch.T
 # ---------------------------------------------------------------------------
 
 
-def sampler_object(name: str) -> Callable:
-    """Return a callable sampler for the given name.
+def sampler_object(name: str) -> "KSAMPLER":
+    """Return a ``KSAMPLER`` instance configured for the given sampler name.
+
+    The returned object has a ``.sample()`` method that runs the full
+    diffusers scheduler loop.  Unimplemented samplers (Phase 2+) raise
+    ``KeyError`` when ``.sample()`` is called, not at factory time — this
+    matches the ComfyUI behavior where ``samplers.sampler_object("lms")``
+    succeeds but running it may not.
 
     Args:
-        name: A sampler name from SAMPLER_NAMES.
-
-    Returns:
-        A callable that can be used as a sampler step function.
+        name: A sampler name from :data:`SAMPLER_NAMES`.
 
     Raises:
-        ValueError: If the sampler name is not recognized.
+        ValueError: If the sampler name is not in the public list.
     """
     if name not in SAMPLER_NAMES:
         raise ValueError(f"Unknown sampler: {name!r}. Valid: {SAMPLER_NAMES}")
-
-    # TODO(Phase3): Return actual sampler implementations.
-    def _stub_sampler(model, x, sigmas, **kwargs):
-        """Stub sampler — raises NotImplementedError until Phase 3."""
-        raise NotImplementedError(
-            f"Sampler {name!r} is not yet implemented. "
-            "Actual sampling algorithms will be added in Phase 3."
-        )
-
-    _stub_sampler.__name__ = f"sampler_{name}"
-    return _stub_sampler
+    return KSAMPLER(sampler_name=name)
 
 
 class KSAMPLER:
-    """Wrapper around a sampler callable with extra/inpaint options.
+    """Concrete sampler that runs a diffusers scheduler loop.
 
-    Attributes:
-        sampler_function: The underlying sampler callable.
-        extra_options: Additional options dict.
-        inpaint_options: Inpaint-specific options dict.
+    Phase 1 handles the euler family (``euler``, ``euler_ancestral``,
+    ``dpmpp_2m``, ``ddim``).  Other samplers raise ``KeyError`` on
+    ``.sample()`` — the full name table is in
+    :mod:`comfy_runtime.compat.comfy._scheduler_map`.
+
+    CFG (classifier-free guidance) is implemented inside this class
+    by batching the conditional and unconditional predictions through
+    a single UNet forward pass per step.  Phase 2 will factor this out
+    into a CFGGuider so that custom guidance strategies can hook in.
     """
 
     def __init__(
         self,
-        sampler_function: Callable,
-        extra_options: Dict = None,
-        inpaint_options: Dict = None,
+        sampler_function=None,
+        extra_options: Optional[Dict] = None,
+        inpaint_options: Optional[Dict] = None,
+        sampler_name: Optional[str] = None,
     ):
-        """Initialize the KSAMPLER wrapper.
+        """Initialize the KSAMPLER.
+
+        The constructor accepts either ``sampler_function`` (legacy
+        ComfyUI callable API) or ``sampler_name`` (preferred MIT API).
+        When both are passed, ``sampler_name`` wins.
 
         Args:
-            sampler_function: The sampler callable.
-            extra_options: Extra options dict forwarded to the sampler.
-            inpaint_options: Inpaint options dict.
+            sampler_function: Legacy callable for API compatibility.
+            extra_options:    Extra kwargs forwarded to the scheduler.
+            inpaint_options:  Inpaint-specific options (Phase 2).
+            sampler_name:     ComfyUI sampler identifier (e.g. ``"euler"``).
         """
         self.sampler_function = sampler_function
+        self.sampler_name = sampler_name or "euler"
         self.extra_options = extra_options or {}
         self.inpaint_options = inpaint_options or {}
 
-    def sample(self, model, noise, sigmas, **kwargs):
-        """Run sampling with the wrapped sampler function.
+    def sample(
+        self,
+        model,
+        noise: torch.Tensor,
+        positive=None,
+        negative=None,
+        cfg: float = 1.0,
+        latent_image: Optional[torch.Tensor] = None,
+        sigmas: Optional[torch.Tensor] = None,
+        denoise_mask=None,
+        callback=None,
+        disable_pbar: bool = False,
+        seed: Optional[int] = None,
+        **kwargs,
+    ) -> torch.Tensor:
+        """Run a diffusers scheduler loop through the ModelPatcher's UNet.
 
         Args:
-            model: The denoising model.
-            noise: Initial noise tensor.
-            sigmas: Sigma schedule tensor.
-            **kwargs: Forwarded to the sampler function.
+            model: A :class:`ModelPatcher` wrapping a diffusers UNet2DCondition
+                (or any module with a ``(sample, timestep, encoder_hidden_states)``
+                signature returning ``.sample``).
+            noise: Initial Gaussian noise at max sigma, shape
+                ``(B, latent_channels, H, W)``.
+            positive: ComfyUI conditioning list for the positive prompt,
+                ``[[cond, {"pooled_output": ...}]]``.
+            negative: Same for the negative prompt.  May be ``None`` when
+                ``cfg <= 1.0``.
+            cfg: Classifier-free guidance scale.  ``cfg <= 1.0`` runs without
+                batching the uncond path.
+            latent_image: Starting latent (zeros for txt2img).
+            sigmas: Sigma schedule from :func:`calculate_sigmas`.  Only the
+                length is used (diffusers derives the timesteps from its own
+                beta schedule); the sigma values are retained for callback
+                compatibility.
+            disable_pbar: Unused in Phase 1 (no tqdm integration yet).
+            seed: Unused in Phase 1; retained for signature parity.
+            **kwargs: Unused in Phase 1; retained for forward compatibility.
 
         Returns:
-            Denoised sample tensor.
+            Denoised latent tensor on the same device/dtype as
+            ``latent_image``.
         """
-        kwargs.update(self.extra_options)
-        return self.sampler_function(model, noise, sigmas, **kwargs)
+        from comfy_runtime.compat.comfy._scheduler_map import (
+            make_diffusers_scheduler,
+        )
+
+        if latent_image is None:
+            raise ValueError("KSAMPLER.sample requires a latent_image tensor")
+
+        unet = model.model if hasattr(model, "model") else model
+
+        scheduler = make_diffusers_scheduler(self.sampler_name, "normal")
+        num_steps = max(1, (sigmas.shape[0] - 1) if sigmas is not None else 1)
+        scheduler.set_timesteps(num_steps)
+
+        # Extract plain tensors from ComfyUI conditioning format
+        pos_cond = positive[0][0] if positive else None
+        neg_cond = negative[0][0] if negative else None
+
+        unet_param = next(unet.parameters())
+        device = unet_param.device
+        dtype = unet_param.dtype
+
+        latent = (latent_image + noise).to(device=device, dtype=dtype)
+        if pos_cond is not None:
+            pos_cond = pos_cond.to(device=device, dtype=dtype)
+        if neg_cond is not None:
+            neg_cond = neg_cond.to(device=device, dtype=dtype)
+
+        do_cfg = cfg > 1.0 and neg_cond is not None
+
+        for i, t in enumerate(scheduler.timesteps):
+            with torch.no_grad():
+                if do_cfg:
+                    latent_in = torch.cat([latent, latent], dim=0)
+                    cond_in = torch.cat([neg_cond, pos_cond], dim=0)
+                    noise_pred = unet(
+                        latent_in, t, encoder_hidden_states=cond_in
+                    ).sample
+                    uncond, cond = noise_pred.chunk(2)
+                    noise_pred = uncond + cfg * (cond - uncond)
+                else:
+                    noise_pred = unet(
+                        latent, t, encoder_hidden_states=pos_cond
+                    ).sample
+
+            step_out = scheduler.step(noise_pred, t, latent)
+            latent = step_out.prev_sample
+
+            if callback is not None:
+                try:
+                    callback({"i": i, "denoised": latent, "x": latent,
+                              "sigma": sigmas[i] if sigmas is not None else None})
+                except Exception:
+                    logger.debug("callback raised; continuing", exc_info=True)
+
+        return latent.to(
+            device=latent_image.device, dtype=latent_image.dtype
+        )
 
 
 def ksampler(
