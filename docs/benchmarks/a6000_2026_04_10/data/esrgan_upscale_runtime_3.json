@@ -1,0 +1,78 @@
+{
+  "workflow": "esrgan_upscale",
+  "side": "runtime",
+  "run_idx": 3,
+  "status": "ok",
+  "error": null,
+  "total_ns": 1790494237,
+  "stages": [
+    {
+      "name": "load_input",
+      "elapsed_ns": 12506437,
+      "node_count": 1
+    },
+    {
+      "name": "model_load",
+      "elapsed_ns": 244149662,
+      "node_count": 1
+    },
+    {
+      "name": "upscale",
+      "elapsed_ns": 882864327,
+      "node_count": 1
+    },
+    {
+      "name": "save",
+      "elapsed_ns": 597765292,
+      "node_count": 1
+    }
+  ],
+  "nodes": [
+    {
+      "class_type": "LoadImage",
+      "call_index": 0,
+      "elapsed_ns": 12506437
+    },
+    {
+      "class_type": "UpscaleModelLoader",
+      "call_index": 0,
+      "elapsed_ns": 244149662
+    },
+    {
+      "class_type": "ImageUpscaleWithModel",
+      "call_index": 0,
+      "elapsed_ns": 882864327
+    },
+    {
+      "class_type": "SaveImage",
+      "call_index": 0,
+      "elapsed_ns": 597765292
+    }
+  ],
+  "gpu_peak_allocated_bytes": 3291584512,
+  "gpu_peak_reserved_bytes": 6650068992,
+  "host_vmhwm_bytes": 1419583488,
+  "env": {
+    "hostname": "fuji1",
+    "timestamp_utc": "2026-04-10T15:28:01.797972Z",
+    "python_version": "3.13.2",
+    "platform": "Linux-5.15.0-170-generic-x86_64-with-glibc2.35",
+    "driver_version": "590.48.01",
+    "comfyui_commit": "2d861fb1",
+    "comfy_runtime_version": "0.3.1",
+    "argv": [
+      "/chivier-disk/yanweiye/Projects/comfy-runtime/.worktrees/flux2-investigation/benchmarks/e2e/runners/runtime_runner.py",
+      "--workflow",
+      "esrgan_upscale",
+      "--run-idx",
+      "3",
+      "--out",
+      "/chivier-disk/yanweiye/Projects/comfy-runtime/.worktrees/flux2-investigation/benchmarks/e2e/results/20260410T152119Z/esrgan_upscale_runtime_3.json"
+    ],
+    "cwd": "/chivier-disk/yanweiye/Projects/comfy-runtime/.worktrees/flux2-investigation",
+    "torch_version": "2.11.0+cu130",
+    "cuda_version": "13.0",
+    "gpu_name": "NVIDIA RTX A6000",
+    "gpu_memory_total_mb": 48541
+  }
+}
