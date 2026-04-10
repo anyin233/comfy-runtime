@@ -6,6 +6,7 @@ build/
 .venv/
 *.so
 _vendor/
+_vendor
 .pytest_cache/
 .worktrees/
 
