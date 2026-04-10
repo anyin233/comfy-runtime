@@ -1,11 +1,10 @@
 """Built-in node definitions for comfy_runtime.
 
-Nodes that perform actual model inference delegate to the vendor bridge
-(comfy._vendor_bridge) which uses the vendored ComfyUI code. This is a
-temporary measure — Phase 2-3 will replace all inference with diffusers.
-
-Nodes that are pure tensor/image operations (EmptyLatentImage, ConditioningCombine,
-etc.) are implemented directly in MIT code.
+Phase 1 of the MIT rewrite: CheckpointLoaderSimple, CLIPTextEncode,
+KSampler, KSamplerAdvanced, VAEDecode, VAEEncode, EmptyLatentImage call
+the MIT compat rewrites directly. LoraLoader, UNETLoader, CLIPLoader,
+ControlNetLoader still delegate to the vendor bridge; those are
+covered by Tasks 2.4 / 2.5.
 """
 
 import json
@@ -19,6 +18,64 @@ from PIL.PngImagePlugin import PngInfo
 
 # Constants used by comfy_extras nodes
 MAX_RESOLUTION = 16384
+
+
+def _common_ksampler(
+    model,
+    seed: int,
+    steps: int,
+    cfg: float,
+    sampler_name: str,
+    scheduler: str,
+    positive,
+    negative,
+    latent_image,
+    denoise: float = 1.0,
+    disable_noise: bool = False,
+    start_step=None,
+    last_step=None,
+    force_full_denoise: bool = False,
+):
+    """Shared SD1.5 sampling path used by :class:`KSampler` and
+    :class:`KSamplerAdvanced`.
+
+    Backed by :mod:`comfy_runtime.compat.comfy.samplers`.  Honors a
+    deterministic seed for reproducibility, uses the tiny fixture's noise
+    shape, and returns a ComfyUI-shaped ``{"samples": ...}`` latent dict.
+    """
+    from comfy_runtime.compat.comfy import samplers
+
+    latent_samples = latent_image["samples"]
+
+    if disable_noise:
+        noise = torch.zeros_like(latent_samples)
+    else:
+        generator = torch.Generator(device="cpu").manual_seed(int(seed))
+        noise = torch.randn(
+            latent_samples.shape,
+            generator=generator,
+            dtype=latent_samples.dtype,
+            device="cpu",
+        )
+
+    sigmas = samplers.calculate_sigmas(None, scheduler, steps)
+
+    sampler = samplers.sampler_object(sampler_name)
+    out_samples = sampler.sample(
+        model=model,
+        noise=noise,
+        positive=positive,
+        negative=negative,
+        cfg=cfg,
+        latent_image=latent_samples,
+        sigmas=sigmas,
+        disable_pbar=True,
+        seed=seed,
+    )
+
+    out = latent_image.copy()
+    out["samples"] = out_samples
+    return (out,)
 
 
 # ---------------------------------------------------------------------------
@@ -316,18 +373,16 @@ class KSampler:
         latent_image,
         denoise=1.0,
     ):
-        from comfy_runtime.compat.comfy._vendor_bridge import ksampler
-
-        return ksampler(
-            model,
-            seed,
-            steps,
-            cfg,
-            sampler_name,
-            scheduler,
-            positive,
-            negative,
-            latent_image,
+        return _common_ksampler(
+            model=model,
+            seed=seed,
+            steps=steps,
+            cfg=cfg,
+            sampler_name=sampler_name,
+            scheduler=scheduler,
+            positive=positive,
+            negative=negative,
+            latent_image=latent_image,
             denoise=denoise,
         )
 
@@ -379,22 +434,19 @@ class KSamplerAdvanced:
         return_with_leftover_noise,
         denoise=1.0,
     ):
-        from comfy_runtime.compat.comfy._vendor_bridge import ksampler
-
-        # KSamplerAdvanced maps to the same underlying sampler
-        force_full_denoise = return_with_leftover_noise != "enable"
         disable_noise = add_noise != "enable"
-        return ksampler(
-            model,
-            noise_seed,
-            steps,
-            cfg,
-            sampler_name,
-            scheduler,
-            positive,
-            negative,
-            latent_image,
+        return _common_ksampler(
+            model=model,
+            seed=noise_seed,
+            steps=steps,
+            cfg=cfg,
+            sampler_name=sampler_name,
+            scheduler=scheduler,
+            positive=positive,
+            negative=negative,
+            latent_image=latent_image,
             denoise=denoise,
+            disable_noise=disable_noise,
         )
 
 
