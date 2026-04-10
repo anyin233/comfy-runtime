@@ -27,6 +27,65 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+_LORA_SCRIPT = r'''
+"""Standalone LoRA roundtrip test — runs inside a fresh venv with only
+the installed comfy_runtime wheel on sys.path.  Proves ModelPatcher
+weight deltas + LoRA apply/unpatch work end-to-end without any source
+tree access."""
+import torch
+import torch.nn as nn
+
+import comfy_runtime
+assert "site-packages" in comfy_runtime.__file__
+comfy_runtime.configure()
+
+from comfy_runtime.compat.comfy._lora_peft import (
+    apply_lora_to_patcher,
+    extract_lora_deltas,
+)
+from comfy_runtime.compat.comfy.model_patcher import ModelPatcher
+
+
+class _Target(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.diffusion_model = nn.Module()
+        self.diffusion_model.proj = nn.Linear(8, 8, bias=False)
+        with torch.no_grad():
+            self.diffusion_model.proj.weight.copy_(torch.zeros(8, 8))
+
+
+target = _Target()
+patcher = ModelPatcher(target)
+original = target.diffusion_model.proj.weight.clone()
+
+# Tiny LoRA with rank=2 / alpha=2 / all-ones factors
+lora_sd = {
+    "diffusion_model.proj.lora_up.weight": torch.ones(8, 2),
+    "diffusion_model.proj.lora_down.weight": torch.ones(2, 8),
+    "diffusion_model.proj.alpha": torch.tensor(2.0),
+}
+n_added = apply_lora_to_patcher(patcher, lora_sd, strength=1.0)
+assert n_added == 1, f"expected 1 delta registered, got {n_added}"
+
+patcher.patch_model()
+assert not torch.allclose(target.diffusion_model.proj.weight, original), (
+    "weight should change after patch_model"
+)
+patched = target.diffusion_model.proj.weight.clone()
+# delta = (1@1)*2=2, scale alpha/rank = 2/2 = 1.0 → delta=2
+expected = torch.full((8, 8), 2.0)
+assert torch.allclose(patched, expected), f"unexpected patched: {patched[0]}"
+
+patcher.unpatch_model()
+assert torch.allclose(target.diffusion_model.proj.weight, original), (
+    "unpatch_model must restore the original weights"
+)
+
+print("OK lora-roundtrip")
+'''
+
+
 # The inline smoke-test script that runs inside the fresh venv.  We build
 # a tiny diffusers pipeline from scratch (no fixtures from the repo) so
 # the test proves the installed wheel can run without touching the source.
@@ -98,12 +157,16 @@ def _find_repo_root() -> Path:
     raise RuntimeError("Could not find repo root containing pyproject.toml")
 
 
-def test_wheel_builds_installs_and_runs_sd15_happy_path():
-    """Build wheel, install in fresh venv, run SD1.5 through MIT compat."""
+def _build_wheel_and_install(tmp_dir: str):
+    """Build the wheel and install it in a fresh venv under ``tmp_dir``.
+
+    Returns:
+        Path to the venv's python executable.
+    """
     repo_root = _find_repo_root()
     dist = repo_root / "dist"
 
-    # 1. Build the wheel fresh
+    # Build the wheel fresh (idempotent — remove stale builds first)
     if dist.exists():
         shutil.rmtree(dist)
     subprocess.run(
@@ -116,36 +179,39 @@ def test_wheel_builds_installs_and_runs_sd15_happy_path():
     assert len(wheels) == 1, f"Expected exactly one wheel, got {wheels}"
     wheel = wheels[0]
 
-    # 2. Create fresh venv in a temp dir
+    venv = Path(tmp_dir) / "venv"
+    subprocess.run(
+        ["uv", "venv", str(venv), "--python", "3.12"],
+        check=True,
+        capture_output=True,
+    )
+    python = venv / "bin" / "python"
+
+    subprocess.run(
+        ["uv", "pip", "install", "--python", str(python), str(wheel)],
+        check=True,
+        capture_output=True,
+    )
+    return python
+
+
+def _run_in_venv(python: Path, script: str, cwd: str) -> subprocess.CompletedProcess:
+    """Run a Python script in the venv from a directory that doesn't have
+    the repo source on sys.path."""
+    return subprocess.run(
+        [str(python), "-c", script],
+        cwd=cwd,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_wheel_builds_installs_and_runs_sd15_happy_path():
+    """Build wheel, install in fresh venv, run SD1.5 through MIT compat."""
     with tempfile.TemporaryDirectory() as tmp:
-        venv = Path(tmp) / "venv"
-        subprocess.run(
-            ["uv", "venv", str(venv), "--python", "3.12"],
-            check=True,
-            capture_output=True,
-        )
-        python = venv / "bin" / "python"
-
-        # 3. Install the wheel with its dependencies
-        subprocess.run(
-            [
-                "uv", "pip", "install", "--python", str(python),
-                str(wheel),
-            ],
-            check=True,
-            capture_output=True,
-        )
-
-        # 4. Run the smoke script from a working dir that has NO access to
-        #    the repo source (so ``import comfy_runtime`` can only resolve
-        #    from site-packages).
-        result = subprocess.run(
-            [str(python), "-c", _SMOKE_SCRIPT],
-            cwd=tmp,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
+        python = _build_wheel_and_install(tmp)
+        result = _run_in_venv(python, _SMOKE_SCRIPT, cwd=tmp)
         assert result.returncode == 0, (
             f"Standalone smoke test failed:\n"
             f"stdout:\n{result.stdout}\n"
@@ -154,3 +220,36 @@ def test_wheel_builds_installs_and_runs_sd15_happy_path():
         assert "OK image=" in result.stdout, (
             f"Smoke test did not print expected marker:\n{result.stdout}"
         )
+
+
+def test_wheel_lora_roundtrip_in_fresh_venv():
+    """LoRA apply/unpatch roundtrip runs from the installed wheel."""
+    with tempfile.TemporaryDirectory() as tmp:
+        python = _build_wheel_and_install(tmp)
+        result = _run_in_venv(python, _LORA_SCRIPT, cwd=tmp)
+        assert result.returncode == 0, (
+            f"LoRA roundtrip failed:\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+        assert "OK lora-roundtrip" in result.stdout
+
+
+def test_wheel_has_no_vendor_entries():
+    """The built wheel must not contain any comfy_runtime/_vendor/ files
+    and must not have a compat/comfy/_vendor_bridge.py entry."""
+    import zipfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        python = _build_wheel_and_install(tmp)
+        del python  # only needed to trigger the build
+
+        repo_root = _find_repo_root()
+        wheels = list((repo_root / "dist").glob("comfy_runtime-*.whl"))
+        assert len(wheels) == 1
+        wheel = wheels[0]
+
+        with zipfile.ZipFile(wheel) as zf:
+            names = zf.namelist()
+        vendor_entries = [n for n in names if "_vendor" in n]
+        assert vendor_entries == [], f"Wheel has _vendor entries: {vendor_entries}"

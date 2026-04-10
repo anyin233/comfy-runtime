@@ -148,3 +148,71 @@ GPL code on the machine.
 `EmptyLatentImage`, `VAEDecode`, `VAEEncode`.
 
 ---
+
+## Phase 2 Complete — 2026-04-10
+
+### Unit tests
+
+| Metric | Value |
+|---|---|
+| Tests passing | **100** (+16 from Phase 1's 84) |
+| New test files | `test_mit_lora.py` (10), `test_mit_standalone_loaders.py` (6) |
+| Run time | ~23 s |
+
+### New compat/ modules
+
+| File | LoC | Purpose |
+|---|---|---|
+| `compat/comfy/_lora_peft.py` | 125 | Kohya LoRA → ModelPatcher deltas |
+
+### Methods implemented in Phase 2
+
+* `extract_lora_deltas(lora_sd)` — parses `.lora_up`/`.lora_down`/`.alpha`
+  triples into raw delta tensors
+* `apply_lora_to_patcher(patcher, lora_sd, strength)` — registers deltas
+  via `ModelPatcher.add_patches`
+* `sd.load_lora_for_models(model, clip, lora, strength_m, strength_c)` —
+  clone-and-register (non-mutating)
+* `sd.load_vae(vae_path)` — standalone VAE file loader
+* `sd.load_clip(clip_path, clip_type)` — standalone CLIP file loader
+* `sd.load_unet(unet_path, dtype=None)` — standalone UNet → ModelPatcher
+
+### `_vendor_bridge.py` DELETED
+
+All 9 bridge functions reimplemented in compat.  `_vendor_bridge.py`
+(359 LoC) removed.  `config.py::_activate_vendor_bridge_if_available()`
+removed.  `test_configure_idempotent.py` rewritten to verify short-
+circuit via `_LAST_CONFIG` directly instead of spying on the bridge.
+
+**All 23 built-in nodes now either MIT-pure or raise NotImplementedError
+with a clear pointer to the Phase-2.5 ControlNet task.**
+
+### Wheel metrics — Phase 2
+
+| Metric | Phase 0 | Phase 1 | Phase 2 | Δ from Phase 1 |
+|---|---|---|---|---|
+| Wheel size | 122 KB | 131 KB | **131 KB** | 0 |
+| Files in wheel | 94 | 97 | **97** | 0 |
+| `_vendor` entries | 1 (bridge) | 1 (bridge) | **0** | **−1 (bridge gone)** |
+
+### Standalone wheel smoke tests — Phase 2
+
+3 tests all PASSED in 26 s:
+
+1. `test_wheel_builds_installs_and_runs_sd15_happy_path` — SD1.5 txt2img
+   pipeline through the installed wheel.
+2. `test_wheel_lora_roundtrip_in_fresh_venv` — LoRA apply + weight
+   mutation + unpatch restore, all from site-packages.
+3. `test_wheel_has_no_vendor_entries` — wheel zip inventory has zero
+   `_vendor` paths.
+
+Proof: ComfyUI optimization parity (weight hot-swap via ModelPatcher +
+LoRA stacking + CLIP/VAE/UNet standalone loaders) works from an
+installed wheel with no GPL code on the host.
+
+### Still on the bridge after Phase 2
+
+**None.**  `_vendor_bridge.py` is gone.  `ControlNetLoader` raises
+`NotImplementedError` pointing at Task 2.5.
+
+---
