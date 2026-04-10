@@ -428,28 +428,53 @@ def load_checkpoint_guess_config(
     output_model: bool = True,
     model_options: Optional[Dict] = None,
 ):
-    """Load a checkpoint and guess its model configuration.
+    """Load a single-file checkpoint and wrap it in ComfyUI's tuple.
+
+    Detects the model family from the state-dict keys (Phase 1: SD1.5
+    only), loads the underlying diffusers + transformers modules, and
+    wraps them in :class:`ModelPatcher`, :class:`CLIP`, and :class:`VAE`.
 
     Args:
-        ckpt_path: Path to the checkpoint file.
-        output_vae: Whether to return a VAE.
-        output_clip: Whether to return a CLIP model.
-        output_clipvision: Whether to return a CLIP vision model.
-        embedding_directory: Directory for text embeddings.
-        output_model: Whether to return the diffusion model.
-        model_options: Additional model loading options.
+        ckpt_path: Path to the checkpoint file (``.safetensors`` or ``.ckpt``).
+        output_vae: Return a VAE wrapper.
+        output_clip: Return a CLIP wrapper.
+        output_clipvision: Return a CLIP vision wrapper (always None in Phase 1).
+        embedding_directory: Directory for text embeddings (unused in Phase 1).
+        output_model: Return the UNet wrapped in a ModelPatcher.
+        model_options: Additional loading options (unused in Phase 1).
 
     Returns:
-        Tuple of (model, clip, vae, clipvision) — any may be None.
+        ``(model, clip, vae, clipvision)`` — any entry may be ``None``
+        according to the output_* flags.
 
     Raises:
-        NotImplementedError: Always (Phase 3 work).
+        ValueError: If the state dict doesn't match any supported family.
     """
-    # TODO(Phase3): Implement checkpoint loading with config detection.
-    raise NotImplementedError(
-        "load_checkpoint_guess_config is a stub. "
-        "Checkpoint loading will be implemented in Phase 3."
-    )
+    from comfy_runtime.compat.comfy._diffusers_loader import load_sd15_single_file
+    from comfy_runtime.compat.comfy.model_patcher import ModelPatcher
+
+    unet, vae_mod, text_encoder, tokenizer = load_sd15_single_file(ckpt_path)
+
+    model = None
+    if output_model:
+        model = ModelPatcher(
+            unet,
+            load_device=torch.device("cpu"),
+            offload_device=torch.device("cpu"),
+        )
+
+    clip = None
+    if output_clip:
+        clip = CLIP(
+            clip_model=text_encoder,
+            tokenizer=tokenizer,
+        )
+
+    vae_wrapper = None
+    if output_vae:
+        vae_wrapper = VAE(vae_model=vae_mod)
+
+    return model, clip, vae_wrapper, None
 
 
 def load_clip(
