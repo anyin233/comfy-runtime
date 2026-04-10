@@ -20,6 +20,7 @@ _vendor
 # Workflow artifacts
 workflows/*/output/
 workflows/*/models/
+workflows/*/models
 workflows/*/.venv/
 uv.lock
 !benchmarks/e2e/**/uv.lock
