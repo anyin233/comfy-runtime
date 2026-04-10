@@ -10,6 +10,26 @@ from comfy_runtime.compat import nodes as _nodes_mod
 from comfy_runtime import executor as _executor
 
 
+# mtime-based cache for load_nodes_from_path: abs_path -> (mtime, [class_types])
+_LOAD_CACHE: dict[str, tuple[float, list[str]]] = {}
+
+
+def _dir_mtime(path: str) -> float:
+    """Return the max mtime of *path* and its first-level .py children.
+
+    Matches the set of files load_nodes_from_path would actually exec.
+    """
+    latest = os.path.getmtime(path)
+    try:
+        with os.scandir(path) as it:
+            for entry in it:
+                if entry.is_file() and entry.name.endswith(".py"):
+                    latest = max(latest, entry.stat().st_mtime)
+    except OSError:
+        pass
+    return latest
+
+
 def register_node(class_type: str, node_cls: type, display_name: str | None = None):
     old_cls = _nodes_mod.NODE_CLASS_MAPPINGS.get(class_type)
     if old_cls is not None and old_cls is not node_cls:
@@ -43,7 +63,9 @@ def load_nodes_from_path(path: str) -> list[str]:
     """Load node module(s) from a .py file or directory path.
 
     Handles both V1 (NODE_CLASS_MAPPINGS in module) and V3
-    (comfy_entrypoint async function) node formats.
+    (comfy_entrypoint async function) node formats. Results are cached
+    by absolute path + mtime; repeated calls for an unchanged file
+    return the cached class_type list without re-executing the module.
 
     Args:
         path: Absolute or relative path to a .py file or directory.
@@ -54,13 +76,35 @@ def load_nodes_from_path(path: str) -> list[str]:
     Raises:
         ValueError: If path is not a .py file or directory.
     """
-    path = os.path.abspath(path)
-    if os.path.isdir(path):
-        return _load_from_directory(path)
-    elif os.path.isfile(path) and path.endswith(".py"):
-        return _load_from_file(path)
+    abs_path = os.path.abspath(path)
+
+    try:
+        if os.path.isfile(abs_path):
+            mtime = os.path.getmtime(abs_path)
+        elif os.path.isdir(abs_path):
+            mtime = _dir_mtime(abs_path)
+        else:
+            mtime = None
+    except OSError:
+        mtime = None
+
+    if mtime is not None:
+        cached = _LOAD_CACHE.get(abs_path)
+        if cached is not None and cached[0] == mtime:
+            names = cached[1]
+            if all(n in _nodes_mod.NODE_CLASS_MAPPINGS for n in names):
+                return list(names)
+
+    if os.path.isdir(abs_path):
+        result = _load_from_directory(abs_path)
+    elif os.path.isfile(abs_path) and abs_path.endswith(".py"):
+        result = _load_from_file(abs_path)
     else:
-        raise ValueError(f"Invalid path (must be .py file or directory): {path}")
+        raise ValueError(f"Invalid path (must be .py file or directory): {abs_path}")
+
+    if mtime is not None:
+        _LOAD_CACHE[abs_path] = (mtime, list(result))
+    return result
 
 
 def _load_from_file(filepath: str) -> list[str]:
