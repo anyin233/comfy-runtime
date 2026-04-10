@@ -1,0 +1,138 @@
+{
+  "workflow": "flux2_klein_text_to_image",
+  "side": "comfyui",
+  "run_idx": 3,
+  "status": "ok",
+  "error": null,
+  "total_ns": 15224707244,
+  "stages": [
+    {
+      "name": "model_load",
+      "elapsed_ns": 2102473239,
+      "node_count": 3
+    },
+    {
+      "name": "text_encode",
+      "elapsed_ns": 1543002987,
+      "node_count": 2
+    },
+    {
+      "name": "guider",
+      "elapsed_ns": 296946,
+      "node_count": 1
+    },
+    {
+      "name": "sampler_prep",
+      "elapsed_ns": 3444422,
+      "node_count": 4
+    },
+    {
+      "name": "sample",
+      "elapsed_ns": 11167201969,
+      "node_count": 1
+    },
+    {
+      "name": "decode",
+      "elapsed_ns": 257102837,
+      "node_count": 1
+    },
+    {
+      "name": "save",
+      "elapsed_ns": 148646658,
+      "node_count": 1
+    }
+  ],
+  "nodes": [
+    {
+      "class_type": "VAELoader",
+      "call_index": 0,
+      "elapsed_ns": 95877167
+    },
+    {
+      "class_type": "EmptyFlux2LatentImage",
+      "call_index": 0,
+      "elapsed_ns": 2681338
+    },
+    {
+      "class_type": "Flux2Scheduler",
+      "call_index": 0,
+      "elapsed_ns": 487579
+    },
+    {
+      "class_type": "KSamplerSelect",
+      "call_index": 0,
+      "elapsed_ns": 150543
+    },
+    {
+      "class_type": "CLIPLoader",
+      "call_index": 0,
+      "elapsed_ns": 1142129531
+    },
+    {
+      "class_type": "CLIPTextEncode",
+      "call_index": 0,
+      "elapsed_ns": 1398029110
+    },
+    {
+      "class_type": "CLIPTextEncode",
+      "call_index": 1,
+      "elapsed_ns": 144973877
+    },
+    {
+      "class_type": "UNETLoader",
+      "call_index": 0,
+      "elapsed_ns": 864466541
+    },
+    {
+      "class_type": "CFGGuider",
+      "call_index": 0,
+      "elapsed_ns": 296946
+    },
+    {
+      "class_type": "RandomNoise",
+      "call_index": 0,
+      "elapsed_ns": 124962
+    },
+    {
+      "class_type": "SamplerCustomAdvanced",
+      "call_index": 0,
+      "elapsed_ns": 11167201969
+    },
+    {
+      "class_type": "VAEDecode",
+      "call_index": 0,
+      "elapsed_ns": 257102837
+    },
+    {
+      "class_type": "SaveImage",
+      "call_index": 0,
+      "elapsed_ns": 148646658
+    }
+  ],
+  "gpu_peak_allocated_bytes": 18365313536,
+  "gpu_peak_reserved_bytes": 19369295872,
+  "host_vmhwm_bytes": 17271357440,
+  "env": {
+    "hostname": "jazz1",
+    "timestamp_utc": "2026-04-10T14:07:38.102183Z",
+    "python_version": "3.13.7",
+    "platform": "Linux-5.15.0-174-generic-x86_64-with-glibc2.35",
+    "driver_version": "580.65.06",
+    "comfyui_commit": "b615af1c",
+    "comfy_runtime_version": "0.3.1",
+    "argv": [
+      "/home/yanweiye/Project/comfy_runtime/.worktrees/flux2-investigation/benchmarks/e2e/runners/comfyui_runner.py",
+      "--workflow",
+      "flux2_klein_text_to_image",
+      "--run-idx",
+      "3",
+      "--out",
+      "/home/yanweiye/Project/comfy_runtime/.worktrees/flux2-investigation/benchmarks/e2e/results/20260410T140008Z/flux2_klein_text_to_image_comfyui_3.json"
+    ],
+    "cwd": "/home/yanweiye/Project/comfy_runtime/.worktrees/flux2-investigation/benchmarks/e2e",
+    "torch_version": "2.11.0+cu130",
+    "cuda_version": "13.0",
+    "gpu_name": "NVIDIA GeForce RTX 4090",
+    "gpu_memory_total_mb": 24080
+  }
+}

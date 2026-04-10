@@ -4,41 +4,41 @@
   "run_idx": 2,
   "status": "ok",
   "error": null,
-  "total_ns": 3193522970,
+  "total_ns": 3189900327,
   "stages": [
     {
       "name": "model_load",
-      "elapsed_ns": 665658913,
+      "elapsed_ns": 672101907,
       "node_count": 1
     },
     {
       "name": "text_encode",
-      "elapsed_ns": 146704993,
+      "elapsed_ns": 144815790,
       "node_count": 4
     },
     {
       "name": "conditioning",
-      "elapsed_ns": 247624,
+      "elapsed_ns": 231925,
       "node_count": 4
     },
     {
       "name": "latent_init",
-      "elapsed_ns": 229684,
+      "elapsed_ns": 219534,
       "node_count": 1
     },
     {
       "name": "sample",
-      "elapsed_ns": 2166127261,
+      "elapsed_ns": 2160364208,
       "node_count": 1
     },
     {
       "name": "decode",
-      "elapsed_ns": 162901378,
+      "elapsed_ns": 160608251,
       "node_count": 1
     },
     {
       "name": "save",
-      "elapsed_ns": 49715275,
+      "elapsed_ns": 49652145,
       "node_count": 1
     }
   ],
@@ -46,90 +46,90 @@
     {
       "class_type": "CheckpointLoaderSimple",
       "call_index": 0,
-      "elapsed_ns": 665658913
+      "elapsed_ns": 672101907
     },
     {
       "class_type": "EmptyLatentImage",
       "call_index": 0,
-      "elapsed_ns": 229684
+      "elapsed_ns": 219534
     },
     {
       "class_type": "CLIPTextEncode",
       "call_index": 0,
-      "elapsed_ns": 108179152
+      "elapsed_ns": 106815370
     },
     {
       "class_type": "CLIPTextEncode",
       "call_index": 1,
-      "elapsed_ns": 13338259
+      "elapsed_ns": 13190463
     },
     {
       "class_type": "ConditioningSetArea",
       "call_index": 0,
-      "elapsed_ns": 74661
+      "elapsed_ns": 65472
     },
     {
       "class_type": "CLIPTextEncode",
       "call_index": 2,
-      "elapsed_ns": 12475134
+      "elapsed_ns": 12416219
     },
     {
       "class_type": "ConditioningSetArea",
       "call_index": 1,
-      "elapsed_ns": 69411
+      "elapsed_ns": 62851
     },
     {
       "class_type": "CLIPTextEncode",
       "call_index": 3,
-      "elapsed_ns": 12712448
+      "elapsed_ns": 12393738
     },
     {
       "class_type": "ConditioningCombine",
       "call_index": 0,
-      "elapsed_ns": 57731
+      "elapsed_ns": 57661
     },
     {
       "class_type": "ConditioningCombine",
       "call_index": 1,
-      "elapsed_ns": 45821
+      "elapsed_ns": 45941
     },
     {
       "class_type": "KSampler",
       "call_index": 0,
-      "elapsed_ns": 2166127261
+      "elapsed_ns": 2160364208
     },
     {
       "class_type": "VAEDecode",
       "call_index": 0,
-      "elapsed_ns": 162901378
+      "elapsed_ns": 160608251
     },
     {
       "class_type": "SaveImage",
       "call_index": 0,
-      "elapsed_ns": 49715275
+      "elapsed_ns": 49652145
     }
   ],
   "gpu_peak_allocated_bytes": 3055036416,
   "gpu_peak_reserved_bytes": 3487563776,
-  "host_vmhwm_bytes": 7357652992,
+  "host_vmhwm_bytes": 7354974208,
   "env": {
     "hostname": "jazz1",
-    "timestamp_utc": "2026-04-10T13:25:09.013311Z",
+    "timestamp_utc": "2026-04-10T14:04:13.312116Z",
     "python_version": "3.13.7",
     "platform": "Linux-5.15.0-174-generic-x86_64-with-glibc2.35",
     "driver_version": "580.65.06",
     "comfyui_commit": "b615af1c",
     "comfy_runtime_version": "0.3.1",
     "argv": [
-      "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e/runners/comfyui_runner.py",
+      "/home/yanweiye/Project/comfy_runtime/.worktrees/flux2-investigation/benchmarks/e2e/runners/comfyui_runner.py",
       "--workflow",
       "area_composition",
       "--run-idx",
       "2",
       "--out",
-      "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e/results/20260410T132106Z/area_composition_comfyui_2.json"
+      "/home/yanweiye/Project/comfy_runtime/.worktrees/flux2-investigation/benchmarks/e2e/results/20260410T140008Z/area_composition_comfyui_2.json"
     ],
-    "cwd": "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e",
+    "cwd": "/home/yanweiye/Project/comfy_runtime/.worktrees/flux2-investigation/benchmarks/e2e",
     "torch_version": "2.11.0+cu130",
     "cuda_version": "13.0",
     "gpu_name": "NVIDIA GeForce RTX 4090",

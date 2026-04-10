@@ -315,6 +315,9 @@ requires-dist = [
 ]
 provides-extras = ["dev"]
 
+[package.metadata.requires-dev]
+dev = [{ name = "matplotlib", specifier = ">=3.10.8" }]
+
 [[package]]
 name = "comfy-runtime-e2e-bench-runtime-side"
 version = "0.0.0"

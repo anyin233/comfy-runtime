@@ -4,46 +4,46 @@
   "run_idx": 1,
   "status": "ok",
   "error": null,
-  "total_ns": 2207044249,
+  "total_ns": 2127540400,
   "stages": [
     {
       "name": "model_load",
-      "elapsed_ns": 545058407,
+      "elapsed_ns": 536123648,
       "node_count": 1
     },
     {
       "name": "load_input",
-      "elapsed_ns": 7851278,
+      "elapsed_ns": 7484254,
       "node_count": 1
     },
     {
       "name": "vae_encode",
-      "elapsed_ns": 256442001,
+      "elapsed_ns": 248723009,
       "node_count": 1
     },
     {
       "name": "noise_mask",
-      "elapsed_ns": 52241,
+      "elapsed_ns": 50560,
       "node_count": 1
     },
     {
       "name": "text_encode",
-      "elapsed_ns": 117185968,
+      "elapsed_ns": 111629674,
       "node_count": 2
     },
     {
       "name": "sample",
-      "elapsed_ns": 1198316178,
+      "elapsed_ns": 1143289609,
       "node_count": 1
     },
     {
       "name": "decode",
-      "elapsed_ns": 42836351,
+      "elapsed_ns": 42582804,
       "node_count": 1
     },
     {
       "name": "save",
-      "elapsed_ns": 35615753,
+      "elapsed_ns": 33946131,
       "node_count": 1
     }
   ],
@@ -51,70 +51,70 @@
     {
       "class_type": "CheckpointLoaderSimple",
       "call_index": 0,
-      "elapsed_ns": 545058407
+      "elapsed_ns": 536123648
     },
     {
       "class_type": "LoadImage",
       "call_index": 0,
-      "elapsed_ns": 7851278
+      "elapsed_ns": 7484254
     },
     {
       "class_type": "VAEEncode",
       "call_index": 0,
-      "elapsed_ns": 256442001
+      "elapsed_ns": 248723009
     },
     {
       "class_type": "SetLatentNoiseMask",
       "call_index": 0,
-      "elapsed_ns": 52241
+      "elapsed_ns": 50560
     },
     {
       "class_type": "CLIPTextEncode",
       "call_index": 0,
-      "elapsed_ns": 102839074
+      "elapsed_ns": 98097141
     },
     {
       "class_type": "CLIPTextEncode",
       "call_index": 1,
-      "elapsed_ns": 14346894
+      "elapsed_ns": 13532533
     },
     {
       "class_type": "KSampler",
       "call_index": 0,
-      "elapsed_ns": 1198316178
+      "elapsed_ns": 1143289609
     },
     {
       "class_type": "VAEDecode",
       "call_index": 0,
-      "elapsed_ns": 42836351
+      "elapsed_ns": 42582804
     },
     {
       "class_type": "SaveImage",
       "call_index": 0,
-      "elapsed_ns": 35615753
+      "elapsed_ns": 33946131
     }
   ],
   "gpu_peak_allocated_bytes": 6884557312,
   "gpu_peak_reserved_bytes": 7088373760,
-  "host_vmhwm_bytes": 7295246336,
+  "host_vmhwm_bytes": 7297728512,
   "env": {
     "hostname": "jazz1",
-    "timestamp_utc": "2026-04-10T13:22:47.528139Z",
+    "timestamp_utc": "2026-04-10T14:01:50.690319Z",
     "python_version": "3.13.7",
     "platform": "Linux-5.15.0-174-generic-x86_64-with-glibc2.35",
     "driver_version": "580.65.06",
     "comfyui_commit": "b615af1c",
     "comfy_runtime_version": "0.3.1",
     "argv": [
-      "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e/runners/runtime_runner.py",
+      "/home/yanweiye/Project/comfy_runtime/.worktrees/flux2-investigation/benchmarks/e2e/runners/runtime_runner.py",
       "--workflow",
       "inpainting",
       "--run-idx",
       "1",
       "--out",
-      "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e/results/20260410T132106Z/inpainting_runtime_1.json"
+      "/home/yanweiye/Project/comfy_runtime/.worktrees/flux2-investigation/benchmarks/e2e/results/20260410T140008Z/inpainting_runtime_1.json"
     ],
-    "cwd": "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e",
+    "cwd": "/home/yanweiye/Project/comfy_runtime/.worktrees/flux2-investigation/benchmarks/e2e",
     "torch_version": "2.11.0+cu130",
     "cuda_version": "13.0",
     "gpu_name": "NVIDIA GeForce RTX 4090",
