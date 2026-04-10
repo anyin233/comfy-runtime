@@ -273,14 +273,13 @@ class ControlNetLoader:
     CATEGORY = "loaders"
 
     def load_controlnet(self, control_net_name):
-        # ControlNet is Task 2.5 in the MIT rewrite plan — not yet
-        # implemented.  Raising here is better than silently falling
-        # back to the bridge (which isn't present in the installed
-        # wheel anyway) so workflows fail loudly.
-        raise NotImplementedError(
-            "ControlNetLoader is not yet implemented in Phase 2. "
-            "Target: Task 2.5 in docs/superpowers/plans/2026-04-10-mit-rewrite-vendor.md"
+        import folder_paths
+        from comfy_runtime.compat.comfy.controlnet import load_controlnet
+
+        ckpt_path = folder_paths.get_full_path_or_raise(
+            "controlnet", control_net_name
         )
+        return (load_controlnet(ckpt_path),)
 
 
 # ---------------------------------------------------------------------------
