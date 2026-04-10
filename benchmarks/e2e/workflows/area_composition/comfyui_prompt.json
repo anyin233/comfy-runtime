@@ -11,7 +11,7 @@
   "2": {
     "inputs": {
       "clip": [
-        1,
+        "1",
         1
       ],
       "text": "a beautiful landscape, wide panoramic view, highly detailed, masterpiece"
@@ -24,7 +24,7 @@
   "3": {
     "inputs": {
       "clip": [
-        1,
+        "1",
         1
       ],
       "text": "sunny daytime scene, bright blue sky, green meadow, flowers, warm lighting"
@@ -37,7 +37,7 @@
   "4": {
     "inputs": {
       "clip": [
-        1,
+        "1",
         1
       ],
       "text": "nighttime scene, dark starry sky, moonlight, mysterious forest, cool blue tones"
@@ -50,7 +50,7 @@
   "5": {
     "inputs": {
       "clip": [
-        1,
+        "1",
         1
       ],
       "text": "blurry, low quality, distorted, watermark"
@@ -63,7 +63,7 @@
   "6": {
     "inputs": {
       "conditioning": [
-        3,
+        "3",
         0
       ],
       "width": 448,
@@ -80,7 +80,7 @@
   "7": {
     "inputs": {
       "conditioning": [
-        4,
+        "4",
         0
       ],
       "width": 448,
@@ -97,11 +97,11 @@
   "8": {
     "inputs": {
       "conditioning_1": [
-        2,
+        "2",
         0
       ],
       "conditioning_2": [
-        6,
+        "6",
         0
       ]
     },
@@ -113,11 +113,11 @@
   "9": {
     "inputs": {
       "conditioning_1": [
-        8,
+        "8",
         0
       ],
       "conditioning_2": [
-        7,
+        "7",
         0
       ]
     },
@@ -146,19 +146,19 @@
       "scheduler": "normal",
       "denoise": 1.0,
       "model": [
-        1,
+        "1",
         0
       ],
       "positive": [
-        9,
+        "9",
         0
       ],
       "negative": [
-        5,
+        "5",
         0
       ],
       "latent_image": [
-        10,
+        "10",
         0
       ]
     },
@@ -170,11 +170,11 @@
   "12": {
     "inputs": {
       "samples": [
-        11,
+        "11",
         0
       ],
       "vae": [
-        1,
+        "1",
         2
       ]
     },
@@ -187,7 +187,7 @@
     "inputs": {
       "filename_prefix": "AREA_bench",
       "images": [
-        12,
+        "12",
         0
       ]
     },
