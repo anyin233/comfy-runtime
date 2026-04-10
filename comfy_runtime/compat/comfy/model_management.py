@@ -635,19 +635,72 @@ class LoadedModel:
         return (0, 0)
 
     def model_load(self, lowvram_model_memory=0, force_patch_weights=False):
-        """Load the model onto the compute device."""
+        """Load the model onto the compute device.
+
+        Routes through :meth:`ModelPatcher.partially_load` so LOW_VRAM
+        / NO_VRAM budget semantics are honored in one place.  When
+        ``lowvram_model_memory == 0``, we interpret that as "full
+        load" (consistent with ComfyUI's convention for NORMAL_VRAM
+        and HIGH_VRAM callers).
+
+        For non-ModelPatcher models we fall back to ``model.to(device)``
+        (tests, standalone nn.Module fixtures, ...).
+
+        Args:
+            lowvram_model_memory: Byte budget for partial load.  0 means
+                "load everything".
+            force_patch_weights: Unused in Phase 3; reserved for the
+                weight-repatch-on-reload flow.
+        """
         model = self._model
         device = get_torch_device()
+        self.device = device
+
+        if hasattr(model, "partially_load"):
+            if lowvram_model_memory and lowvram_model_memory > 0:
+                budget = int(lowvram_model_memory)
+            else:
+                total = (
+                    model.model_size() if hasattr(model, "model_size") else 0
+                )
+                # "Full load" == budget larger than the model.
+                budget = max(total + 1, 1 << 62)
+            model.partially_load(device, extra_memory=budget)
+            return
+
         if hasattr(model, "to"):
             model.to(device)
-        self.device = device
 
     def should_reload_model(self, force_patch_weights=False) -> bool:
         return False
 
     def model_unload(self, memory_to_free=None, unpatch_weights=True) -> bool:
-        """Unload the model to CPU."""
+        """Unload the model back to its offload device.
+
+        For ModelPatcher instances this calls :meth:`partially_unload`
+        with a budget large enough to evict everything.  For plain
+        nn.Modules we fall back to ``.to("cpu")``.
+
+        Args:
+            memory_to_free: Minimum bytes to free.  If ``None`` (the
+                default) we evict everything.
+            unpatch_weights: Unused in Phase 3.
+        """
         model = self._model
+
+        if hasattr(model, "partially_unload"):
+            offload = getattr(
+                model, "offload_device", torch.device("cpu")
+            )
+            if memory_to_free is None:
+                # Evict everything: pass a budget larger than any model
+                budget = 1 << 62
+            else:
+                budget = int(memory_to_free)
+            model.partially_unload(offload, extra_memory=budget)
+            self.device = offload
+            return True
+
         if hasattr(model, "to"):
             model.to(torch.device("cpu"))
         self.device = torch.device("cpu")
@@ -679,12 +732,28 @@ def load_models_gpu(
 ):
     """Load a list of models onto the compute device.
 
+    The behavior depends on :data:`vram_state`:
+
+    * ``HIGH_VRAM`` / ``NORMAL_VRAM`` — full load via
+      :meth:`ModelPatcher.partially_load` with an infinite budget.
+    * ``LOW_VRAM`` — partial residency via ``partially_load`` with
+      ``budget = minimum_memory_required`` (the caller tells us how
+      much fits).  When the caller doesn't pass a budget we fall back
+      to half the model size, matching ComfyUI's "fit half" heuristic.
+    * ``NO_VRAM``  — budget = 0, nothing moves to the compute device.
+    * ``DISABLED`` — the caller shouldn't be invoking us, but we
+      treat it as ``NO_VRAM`` defensively.
+
     Args:
-        models: List of model objects (typically ModelPatcher instances).
-        memory_required: Extra memory headroom needed.
-        force_patch_weights: Force re-patching weights.
-        minimum_memory_required: Minimum free memory after loading.
-        force_full_load: Force loading entire model.
+        models: List of :class:`ModelPatcher`-like objects (or raw
+            nn.Module fallbacks).
+        memory_required: Extra memory headroom the caller wants.
+            Currently unused in Phase 3 — reserved for when we add
+            real accelerate-based dispatch.
+        force_patch_weights: Forwarded to :meth:`LoadedModel.model_load`.
+        minimum_memory_required: Byte budget for LOW_VRAM partial load.
+        force_full_load: When True, ignore vram_state and force a full
+            load (used by explicit high-priority ops).
     """
     global current_loaded_models
     cleanup_models_gc()
@@ -696,7 +765,6 @@ def load_models_gpu(
         if model is None:
             continue
 
-        # Check if already loaded
         already_loaded = False
         for loaded in current_loaded_models:
             if loaded.model is model or (
@@ -712,7 +780,6 @@ def load_models_gpu(
     if not models_to_load:
         return
 
-    # Free memory if needed
     total_mem_needed = (
         sum(m.model_size() if hasattr(m, "model_size") else 0 for m in models_to_load)
         + memory_required
@@ -723,11 +790,36 @@ def load_models_gpu(
             total_mem_needed, device, keep_loaded=[m for m in models if m is not None]
         )
 
-    # Load each model
+    # Resolve the per-model byte budget from vram_state.
     for model in models_to_load:
+        model_size = (
+            model.model_size() if hasattr(model, "model_size") else 0
+        )
+
+        if force_full_load or vram_state in (
+            VRAMState.HIGH_VRAM,
+            VRAMState.NORMAL_VRAM,
+            VRAMState.SHARED,
+        ):
+            budget = 0  # 0 → LoadedModel.model_load interprets as "full"
+        elif vram_state == VRAMState.LOW_VRAM:
+            if minimum_memory_required and minimum_memory_required > 0:
+                budget = int(minimum_memory_required)
+            else:
+                # ComfyUI's fallback: fit as much as half the model.
+                budget = max(1, model_size // 2)
+        elif vram_state in (VRAMState.NO_VRAM, VRAMState.DISABLED):
+            budget = 1  # positive to bypass the "0 means full" branch,
+            # but smaller than any real parameter so nothing moves.
+        else:
+            budget = 0
+
         loaded = LoadedModel(model)
         try:
-            loaded.model_load(force_patch_weights=force_patch_weights)
+            loaded.model_load(
+                lowvram_model_memory=budget,
+                force_patch_weights=force_patch_weights,
+            )
         except Exception:
             logger.warning("Failed to load model onto device, using CPU fallback")
             loaded.device = torch.device("cpu")
