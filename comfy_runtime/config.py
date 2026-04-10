@@ -1,6 +1,12 @@
 """Runtime configuration API for comfy-runtime."""
 
 
+# Snapshot of the most recent successful configure() call. Used to
+# short-circuit identical re-configuration (common in long-running
+# services that re-initialize on every request).
+_LAST_CONFIG: tuple | None = None
+
+
 def _activate_vendor_bridge_if_available():
     """Activate the vendor bridge so inference-dependent modules resolve
     to the vendored ComfyUI code. Called early in configure() so that
@@ -36,6 +42,19 @@ def configure(
     Returns:
         None.
     """
+    global _LAST_CONFIG
+    snapshot = (
+        models_dir,
+        output_dir,
+        input_dir,
+        temp_dir,
+        vram_mode,
+        device,
+        tuple(sorted(kwargs.items())),
+    )
+    if _LAST_CONFIG is not None and _LAST_CONFIG == snapshot:
+        return
+
     from comfy.cli_args import args  # type: ignore[import-not-found]
 
     if vram_mode == "highvram":
@@ -90,6 +109,15 @@ def configure(
                 existing_paths, existing_exts = folder_paths.folder_names_and_paths[
                     category
                 ]
+                # Dedup guard: don't prepend the same path twice.
+                if cat_dir in existing_paths:
+                    merged_exts = set(existing_exts) | extensions
+                    if merged_exts != set(existing_exts):
+                        folder_paths.folder_names_and_paths[category] = (
+                            list(existing_paths),
+                            merged_exts,
+                        )
+                    continue
                 folder_paths.folder_names_and_paths[category] = (
                     [cat_dir] + list(existing_paths),
                     set(existing_exts) | extensions,
@@ -99,6 +127,7 @@ def configure(
 
     # Activate vendor bridge so subsequent node loading gets real implementations
     _activate_vendor_bridge_if_available()
+    _LAST_CONFIG = snapshot
 
 
 def get_config():
