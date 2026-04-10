@@ -9,7 +9,7 @@ description = "Minimal ComfyUI runtime for deploying custom nodes as microservic
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
-authors = [{name = "ComfyUI Community"}]
+authors = [{name = "anyin233", email = "cydia2001@duck.com"}]
 keywords = ["comfyui", "runtime", "nodes", "microservice", "inference"]
 classifiers = [
   "Development Status :: 3 - Alpha",
