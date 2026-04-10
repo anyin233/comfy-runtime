@@ -265,32 +265,68 @@ class VAE:
         self.output_device = torch.device("cpu")
 
     def decode(self, latent: torch.Tensor) -> torch.Tensor:
-        """Decode latent tensor to image tensor.
+        """Decode a latent tensor to an image tensor via diffusers AutoencoderKL.
 
         Args:
-            latent: Latent tensor of shape (B, C, H, W).
+            latent: Tensor of shape ``(B, latent_channels, H, W)``.
 
         Returns:
-            Image tensor of shape (B, H*f, W*f, 3) in [0, 1] range.
+            Image tensor of shape ``(B, H*f, W*f, 3)`` in ``[0, 1]``.
         """
-        # TODO(Phase3): Implement actual VAE decoding.
-        raise NotImplementedError(
-            "VAE.decode is a stub. Decoding will be implemented in Phase 3."
-        )
+        if self.vae_model is None:
+            raise RuntimeError("VAE.decode requires self.vae_model to be set")
+
+        first_param = next(self.vae_model.parameters())
+        device = first_param.device
+        dtype = first_param.dtype
+
+        # diffusers AutoencoderKL internally multiplies by scaling_factor
+        # when it was produced by `vae.encode(...).latent_dist.sample() * scaling`.
+        # ComfyUI stores latents *already scaled*, so we divide out first.
+        scaling = float(getattr(self.vae_model.config, "scaling_factor", 0.18215))
+        latent = latent.to(device=device, dtype=dtype) / scaling
+
+        with torch.no_grad():
+            decoded = self.vae_model.decode(latent).sample
+
+        # diffusers output: (B, C, H, W) in ~[-1, 1]
+        # ComfyUI convention: (B, H, W, C) in [0, 1]
+        img = (decoded.clamp(-1.0, 1.0) + 1.0) * 0.5
+        img = img.permute(0, 2, 3, 1).contiguous().to(torch.float32)
+        return img.to(self.output_device)
 
     def encode(self, image: torch.Tensor) -> torch.Tensor:
-        """Encode image tensor to latent tensor.
+        """Encode an image tensor to latent space via diffusers AutoencoderKL.
 
         Args:
-            image: Image tensor of shape (B, H, W, 3) in [0, 1] range.
+            image: Tensor of shape ``(B, H, W, 3)`` in ``[0, 1]``.
 
         Returns:
-            Latent tensor of shape (B, C, H/f, W/f).
+            Latent tensor of shape ``(B, latent_channels, H/f, W/f)`` pre-scaled
+            by ``vae.config.scaling_factor`` (ComfyUI convention).
         """
-        # TODO(Phase3): Implement actual VAE encoding.
-        raise NotImplementedError(
-            "VAE.encode is a stub. Encoding will be implemented in Phase 3."
-        )
+        if self.vae_model is None:
+            raise RuntimeError("VAE.encode requires self.vae_model to be set")
+
+        first_param = next(self.vae_model.parameters())
+        device = first_param.device
+        dtype = first_param.dtype
+
+        img = image.to(device=device, dtype=dtype)
+        # ComfyUI input: (B, H, W, C) → diffusers: (B, C, H, W)
+        if img.dim() == 4 and img.shape[-1] in (3, 4):
+            img = img.permute(0, 3, 1, 2).contiguous()
+        # Drop alpha if present
+        if img.shape[1] == 4:
+            img = img[:, :3, :, :]
+        # [0, 1] → [-1, 1]
+        img = img * 2.0 - 1.0
+
+        scaling = float(getattr(self.vae_model.config, "scaling_factor", 0.18215))
+        with torch.no_grad():
+            dist = self.vae_model.encode(img).latent_dist
+        latent = dist.sample() * scaling
+        return latent
 
     def decode_tiled(
         self,

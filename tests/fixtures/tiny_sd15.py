@@ -33,13 +33,18 @@ def _make_tiny_unet() -> UNet2DConditionModel:
 
 
 def _make_tiny_vae() -> AutoencoderKL:
-    """A single-block VAE with 2x spatial downsample."""
+    """A 2-block VAE with 2x spatial downsample (mimics SD1.5 at mini scale).
+
+    Two blocks produce exactly one downsample, so a 32x32 image becomes
+    a 16x16 latent — the same 2x factor as real SD1.5 (except real uses 8x
+    from 4 blocks).
+    """
     return AutoencoderKL(
         in_channels=3,
         out_channels=3,
-        down_block_types=("DownEncoderBlock2D",),
-        up_block_types=("UpDecoderBlock2D",),
-        block_out_channels=(16,),
+        down_block_types=("DownEncoderBlock2D", "DownEncoderBlock2D"),
+        up_block_types=("UpDecoderBlock2D", "UpDecoderBlock2D"),
+        block_out_channels=(16, 32),
         layers_per_block=1,
         latent_channels=4,
         norm_num_groups=8,
