@@ -76,7 +76,9 @@ def _clean_env() -> dict[str, str]:
         "PYTHONHASHSEED": "0",
         "CUBLAS_WORKSPACE_CONFIG": ":4096:8",
     }
-    for k in ("HF_HOME", "HUGGINGFACE_HUB_CACHE", "XDG_CACHE_HOME", "LD_LIBRARY_PATH"):
+    # COMFYUI_PATH lets the comfyui runner find the upstream clone on
+    # machines where it's not at the original /home/yanweiye/Project path.
+    for k in ("HF_HOME", "HUGGINGFACE_HUB_CACHE", "XDG_CACHE_HOME", "LD_LIBRARY_PATH", "COMFYUI_PATH"):
         if k in os.environ:
             env[k] = os.environ[k]
     return env
