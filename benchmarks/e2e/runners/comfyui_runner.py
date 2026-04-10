@@ -77,12 +77,30 @@ def _load_stages(stages_yaml: Path) -> dict[str, list[str]]:
 def _configure_folder_paths(workflow_models_dir: Path) -> None:
     """Point ComfyUI's folder_paths at the workflow's models/ subtree.
 
-    Args:
-        workflow_models_dir: Directory whose immediate subdirectories are model
-            categories (e.g. ``checkpoints/``, ``loras/``). Skipped silently if
-            the directory does not exist.
+    Also calls ``nodes.init_extra_nodes()`` to register comfy_extras nodes
+    (Flux2 sampler, custom samplers, upscalers, etc.). Without this call,
+    only the core ``nodes.NODE_CLASS_MAPPINGS`` are registered and nodes
+    like ``SamplerCustomAdvanced``, ``Flux2Scheduler``, ``UpscaleModelLoader``
+    are missing. Best-effort — some ComfyUI versions init on import; newer
+    versions expose it as an async coroutine that must be driven via asyncio.
     """
+    import asyncio
+    import inspect
+
     import folder_paths
+    import nodes
+
+    if hasattr(nodes, "init_extra_nodes"):
+        try:
+            fn = nodes.init_extra_nodes
+            if inspect.iscoroutinefunction(fn):
+                # Newer ComfyUI (post-2024) made init_extra_nodes async.
+                # Skip custom-node discovery to avoid unrelated plugin errors.
+                asyncio.run(fn(init_custom_nodes=False, init_api_nodes=False))
+            else:
+                fn()
+        except Exception:
+            pass
 
     if not workflow_models_dir.exists():
         return
