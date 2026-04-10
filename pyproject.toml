@@ -56,3 +56,8 @@ include = ["comfy_runtime*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[dependency-groups]
+dev = [
+    "matplotlib>=3.10.8",
+]
