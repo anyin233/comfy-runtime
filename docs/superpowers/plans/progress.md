@@ -36,4 +36,39 @@ These nine functions are the complete list of Phase-3 replacements needed.
 All `_vendor` references removed except the docstring comment in `_io.py`, which
 can be updated to past-tense at the end of Phase 4.
 
+## Phase 0 Wheel Baseline — 2026-04-10
+
+Build: `python -m build --wheel` with no `_vendor/` populated.
+
+| Metric | Value |
+|---|---|
+| Wheel path | `dist/comfy_runtime-0.3.1-py3-none-any.whl` |
+| Wheel size | **122 KB** |
+| Files in wheel | **94** |
+| `_vendor/` entries in wheel | **0** (only match: `compat/comfy/_vendor_bridge.py`) |
+| Bridge file size in wheel | 12 116 bytes |
+
+### Standalone install smoke test (Phase 0)
+
+```bash
+uv venv /tmp/cr-phase0-test --python 3.12
+uv pip install --python /tmp/cr-phase0-test/bin/python dist/comfy_runtime-0.3.1-py3-none-any.whl
+cd /tmp
+/tmp/cr-phase0-test/bin/python -c "
+import comfy_runtime
+comfy_runtime.configure()
+import nodes
+print('node count:', len(nodes.NODE_CLASS_MAPPINGS))
+"
+```
+
+Result: **node count: 23** — configure() completes, shim routes `import nodes`
+to `compat/nodes.py`, all 23 built-in node classes register. The vendor bridge
+warns once about missing `_vendor` but swallows the exception silently.
+
+**Insight:** the wheel is *structurally* already slim. The work in Phase 1-4 is
+to make node bodies (KSampler, CLIPTextEncode, VAEDecode, …) *functionally*
+work without the bridge, not to physically shrink the wheel. The wheel stays
+~122 KB throughout.
+
 ---
