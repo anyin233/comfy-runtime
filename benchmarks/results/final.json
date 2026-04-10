@@ -1,0 +1,110 @@
+{
+  "configure.cold": {
+    "name": "configure.cold",
+    "iters": 50,
+    "min_ns": 15720,
+    "median_ns": 15980.0,
+    "mean_ns": 16042.46,
+    "p95_ns": 16630,
+    "stddev_ns": 307.12637203600735
+  },
+  "configure.steady": {
+    "name": "configure.steady",
+    "iters": 5000,
+    "min_ns": 350,
+    "median_ns": 380.0,
+    "mean_ns": 384.5344,
+    "p95_ns": 410,
+    "stddev_ns": 66.07297190712704
+  },
+  "execute_node.EmptyLatentImage": {
+    "name": "execute_node.EmptyLatentImage",
+    "iters": 2000,
+    "min_ns": 3401,
+    "median_ns": 3550.0,
+    "mean_ns": 3555.2165,
+    "p95_ns": 3660,
+    "stddev_ns": 205.07694806523233
+  },
+  "list_nodes": {
+    "name": "list_nodes",
+    "iters": 5000,
+    "min_ns": 340,
+    "median_ns": 360.0,
+    "mean_ns": 369.3822,
+    "p95_ns": 410,
+    "stddev_ns": 23.698365411141758
+  },
+  "execute_node.ConditioningZeroOut": {
+    "name": "execute_node.ConditioningZeroOut",
+    "iters": 1000,
+    "min_ns": 8401,
+    "median_ns": 9995.0,
+    "mean_ns": 10383.063,
+    "p95_ns": 12990,
+    "stddev_ns": 1359.7890281330408
+  },
+  "lanczos.latent_64_to_128": {
+    "name": "lanczos.latent_64_to_128",
+    "iters": 200,
+    "min_ns": 180253,
+    "median_ns": 291414.5,
+    "mean_ns": 288183.625,
+    "p95_ns": 295385,
+    "stddev_ns": 19956.920001953582
+  },
+  "lanczos.image_256_to_512": {
+    "name": "lanczos.image_256_to_512",
+    "iters": 50,
+    "min_ns": 299235,
+    "median_ns": 327040.0,
+    "mean_ns": 332259.42,
+    "p95_ns": 381806,
+    "stddev_ns": 23116.52212430754
+  },
+  "load_nodes.cold": {
+    "name": "load_nodes.cold",
+    "iters": 100,
+    "min_ns": 54621,
+    "median_ns": 57186.0,
+    "mean_ns": 60009.94,
+    "p95_ns": 63471,
+    "stddev_ns": 13644.857785862043
+  },
+  "load_nodes.warm": {
+    "name": "load_nodes.warm",
+    "iters": 5000,
+    "min_ns": 5130,
+    "median_ns": 5260.0,
+    "mean_ns": 5283.0044,
+    "p95_ns": 5370,
+    "stddev_ns": 268.2847069451406
+  },
+  "save_image.batch4_128x128": {
+    "name": "save_image.batch4_128x128",
+    "iters": 200,
+    "min_ns": 5564098,
+    "median_ns": 6204818.0,
+    "mean_ns": 6189298.835,
+    "p95_ns": 6649084,
+    "stddev_ns": 318193.1192656714
+  },
+  "load_image.rgb_256x256": {
+    "name": "load_image.rgb_256x256",
+    "iters": 200,
+    "min_ns": 886144,
+    "median_ns": 891989.0,
+    "mean_ns": 894900.17,
+    "p95_ns": 903584,
+    "stddev_ns": 21221.050982481993
+  },
+  "load_image.rgba_256x256": {
+    "name": "load_image.rgba_256x256",
+    "iters": 200,
+    "min_ns": 1606455,
+    "median_ns": 1630830.5,
+    "mean_ns": 1635894.055,
+    "p95_ns": 1649756,
+    "stddev_ns": 36108.1356753845
+  }
+}

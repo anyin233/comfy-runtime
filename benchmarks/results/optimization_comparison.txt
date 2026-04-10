@@ -1,0 +1,12 @@
+## execute_node dispatch (EmptyLatentImage, 512x512)
+  execute_node dispatch           naive=     12.09us  optimized=      3.62us  speedup=  3.34x
+## SaveImage (batch=4, 128x128, device=cuda)
+  SaveImage (full, incl. PNG)     naive=   5858.61us  optimized=   5783.76us  speedup=  1.01x
+## SaveImage tensor conversion ONLY (batch=8, 512x512, device=cuda)
+  SaveImage conversion            naive=   4247.01us  optimized=   2574.17us  speedup=  1.65x
+## LoadImage (RGB, 256x256)
+  LoadImage RGB                   naive=   1042.41us  optimized=    895.37us  speedup=  1.16x
+## Lanczos upscale (latent 64->128, 4 channels)
+  Lanczos latent 64->128          naive=    590.81us  optimized=    189.17us  speedup=  3.12x
+## Lanczos upscale (image 3ch 256->512)
+  Lanczos image 256->512          naive=   4646.43us  optimized=    305.81us  speedup= 15.19x
