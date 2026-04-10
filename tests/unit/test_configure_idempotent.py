@@ -27,39 +27,42 @@ def test_configure_twice_does_not_duplicate_paths():
         )
 
 
-def test_configure_snapshot_shortcircuits(monkeypatch):
-    """Identical kwargs must short-circuit and skip vendor bridge re-activation."""
+def test_configure_snapshot_shortcircuits():
+    """Identical kwargs must short-circuit via ``_LAST_CONFIG``.
+
+    Before Phase-2 cleanup, this test spied on the vendor-bridge
+    activation call.  The bridge is gone, so we now verify the
+    short-circuit directly: after a no-op re-configure, the snapshot
+    stays unchanged and no duplicate folder paths are added.
+    """
     with tempfile.TemporaryDirectory() as tmp:
         _reset_config_state()
         comfy_runtime.configure(models_dir=tmp)
+        first_snapshot = cfg_mod._LAST_CONFIG
 
-        call_count = {"n": 0}
-        orig = cfg_mod._activate_vendor_bridge_if_available
+        import folder_paths  # noqa: E402
+        paths_after_first = list(folder_paths.folder_names_and_paths["checkpoints"][0])
 
-        def spy():
-            call_count["n"] += 1
-            orig()
-
-        monkeypatch.setattr(cfg_mod, "_activate_vendor_bridge_if_available", spy)
         comfy_runtime.configure(models_dir=tmp)
+        second_snapshot = cfg_mod._LAST_CONFIG
+        paths_after_second = list(folder_paths.folder_names_and_paths["checkpoints"][0])
 
-        assert call_count["n"] == 0, "identical configure should short-circuit"
+        # Snapshot object identity is preserved when short-circuited
+        assert first_snapshot == second_snapshot
+        # And path state is unchanged
+        assert paths_after_first == paths_after_second
 
 
-def test_configure_with_different_args_does_not_shortcircuit(monkeypatch):
-    """Changed kwargs must re-run the full configure path."""
+def test_configure_with_different_args_does_not_shortcircuit():
+    """Changed kwargs must re-run the full configure path and update snapshot."""
     with tempfile.TemporaryDirectory() as tmp_a, tempfile.TemporaryDirectory() as tmp_b:
         _reset_config_state()
         comfy_runtime.configure(models_dir=tmp_a)
+        first_snapshot = cfg_mod._LAST_CONFIG
 
-        call_count = {"n": 0}
-        orig = cfg_mod._activate_vendor_bridge_if_available
-
-        def spy():
-            call_count["n"] += 1
-            orig()
-
-        monkeypatch.setattr(cfg_mod, "_activate_vendor_bridge_if_available", spy)
         comfy_runtime.configure(models_dir=tmp_b)
+        second_snapshot = cfg_mod._LAST_CONFIG
 
-        assert call_count["n"] == 1
+        assert first_snapshot != second_snapshot, (
+            "different kwargs must produce a different snapshot"
+        )

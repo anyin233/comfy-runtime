@@ -100,9 +100,7 @@ class CheckpointLoaderSimple:
 
     def load_checkpoint(self, ckpt_name):
         import folder_paths
-        from comfy_runtime.compat.comfy._vendor_bridge import (
-            load_checkpoint_guess_config,
-        )
+        from comfy_runtime.compat.comfy.sd import load_checkpoint_guess_config
 
         ckpt_path = folder_paths.get_full_path_or_raise("checkpoints", ckpt_name)
         out = load_checkpoint_guess_config(ckpt_path, output_vae=True, output_clip=True)
@@ -127,7 +125,7 @@ class UNETLoader:
 
     def load_unet(self, unet_name, weight_dtype):
         import folder_paths
-        from comfy_runtime.compat.comfy._vendor_bridge import load_unet
+        from comfy_runtime.compat.comfy.sd import load_unet as _load_unet
 
         unet_path = folder_paths.get_full_path_or_raise("diffusion_models", unet_name)
         dtype_map = {
@@ -135,7 +133,7 @@ class UNETLoader:
             "fp8_e5m2": torch.float8_e5m2,
         }
         dtype = dtype_map.get(weight_dtype)
-        model = load_unet(unet_path, dtype=dtype)
+        model = _load_unet(unet_path, dtype=dtype)
         return (model,)
 
 
@@ -176,33 +174,24 @@ class CLIPLoader:
 
     def load_clip(self, clip_name, type):
         import folder_paths
-        from comfy_runtime.compat.comfy._vendor_bridge import (
-            load_clip as _load_clip,
-            _ensure_vendor_imports,
-        )
+        from comfy_runtime.compat.comfy.sd import load_clip as _load_clip, CLIPType
 
-        _ensure_vendor_imports()
         clip_path = folder_paths.get_full_path_or_raise("text_encoders", clip_name)
-        # Map type string to CLIPType from vendored code
-        from comfy.sd import CLIPType
 
         type_map = {
-            "stable_diffusion": CLIPType.STABLE_DIFFUSION,
+            "stable_diffusion": CLIPType.SD1,
             "stable_cascade": CLIPType.STABLE_CASCADE,
             "sd3": CLIPType.SD3,
-            "stable_audio": CLIPType.STABLE_AUDIO,
-            "mochi": CLIPType.MOCHI,
             "ltxv": CLIPType.LTXV,
             "pixart": CLIPType.PIXART,
-            "cosmos": CLIPType.COSMOS,
             "lumina2": CLIPType.LUMINA2,
             "wan": CLIPType.WAN,
             "flux": CLIPType.FLUX,
-            "flux2": CLIPType.FLUX2,
             "hunyuan_video": CLIPType.HUNYUAN_VIDEO,
+            "mochi": CLIPType.MOCHI,
         }
-        clip_type = type_map.get(type, CLIPType.STABLE_DIFFUSION)
-        clip = _load_clip([clip_path], clip_type=clip_type)
+        clip_type = type_map.get(type, CLIPType.SD1)
+        clip = _load_clip(clip_path, clip_type=clip_type)
         return (clip,)
 
 
@@ -223,10 +212,10 @@ class VAELoader:
 
     def load_vae(self, vae_name):
         import folder_paths
-        from comfy_runtime.compat.comfy._vendor_bridge import load_vae
+        from comfy_runtime.compat.comfy.sd import load_vae as _load_vae
 
         vae_path = folder_paths.get_full_path_or_raise("vae", vae_name)
-        vae = load_vae(vae_path)
+        vae = _load_vae(vae_path)
         return (vae,)
 
 
@@ -284,17 +273,14 @@ class ControlNetLoader:
     CATEGORY = "loaders"
 
     def load_controlnet(self, control_net_name):
-        import folder_paths
-        from comfy_runtime.compat.comfy._vendor_bridge import _ensure_vendor_imports
-
-        _ensure_vendor_imports()
-        from comfy.controlnet import load_controlnet
-
-        controlnet_path = folder_paths.get_full_path_or_raise(
-            "controlnet", control_net_name
+        # ControlNet is Task 2.5 in the MIT rewrite plan — not yet
+        # implemented.  Raising here is better than silently falling
+        # back to the bridge (which isn't present in the installed
+        # wheel anyway) so workflows fail loudly.
+        raise NotImplementedError(
+            "ControlNetLoader is not yet implemented in Phase 2. "
+            "Target: Task 2.5 in docs/superpowers/plans/2026-04-10-mit-rewrite-vendor.md"
         )
-        controlnet = load_controlnet(controlnet_path)
-        return (controlnet,)
 
 
 # ---------------------------------------------------------------------------
@@ -317,9 +303,8 @@ class CLIPTextEncode:
     CATEGORY = "conditioning"
 
     def encode(self, clip, text):
-        from comfy_runtime.compat.comfy._vendor_bridge import encode_clip_text
-
-        return (encode_clip_text(clip, text),)
+        tokens = clip.tokenize(text)
+        return (clip.encode_from_tokens_scheduled(tokens),)
 
 
 # ---------------------------------------------------------------------------
@@ -493,9 +478,7 @@ class VAEDecode:
     CATEGORY = "latent"
 
     def decode(self, vae, samples):
-        from comfy_runtime.compat.comfy._vendor_bridge import vae_decode
-
-        return (vae_decode(vae, samples),)
+        return (vae.decode(samples["samples"]),)
 
 
 class VAEEncode:
@@ -513,9 +496,7 @@ class VAEEncode:
     CATEGORY = "latent"
 
     def encode(self, vae, pixels):
-        from comfy_runtime.compat.comfy._vendor_bridge import vae_encode
-
-        return (vae_encode(vae, pixels),)
+        return ({"samples": vae.encode(pixels[:, :, :, :3])},)
 
 
 class LatentUpscale:
