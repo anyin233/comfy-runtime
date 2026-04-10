@@ -72,3 +72,79 @@ work without the bridge, not to physically shrink the wheel. The wheel stays
 ~122 KB throughout.
 
 ---
+
+## Phase 1 Complete — 2026-04-10
+
+### Unit tests
+
+| Metric | Value |
+|---|---|
+| Tests passing | **84** (up from baseline 42) |
+| New test files | `test_dependencies.py`, `test_tiny_fixture.py`, `test_mit_clip_encode.py`, `test_mit_vae.py`, `test_mit_model_patcher.py`, `test_mit_sampler.py`, `test_mit_sd_loader.py`, `test_mit_nodes_end_to_end.py` |
+| Run time | ~19 s |
+
+### New compat/ modules
+
+| File | LoC | Purpose |
+|---|---|---|
+| `compat/comfy/_tokenizer.py` | 85 | ComfyUI-format tokens from HF tokenizers |
+| `compat/comfy/_scheduler_map.py` | 80 | ComfyUI sampler_name → diffusers scheduler |
+| `compat/comfy/_diffusers_loader.py` | 85 | SD1.5 single-file → diffusers modules |
+
+### Methods implemented (replacing Phase-3 stubs)
+
+* `CLIP.tokenize` (transformers CLIPTokenizer)
+* `CLIP.encode_from_tokens` (CLIPTextModel forward)
+* `CLIP.encode_from_tokens_scheduled`
+* `VAE.encode` (AutoencoderKL.encode)
+* `VAE.decode` (AutoencoderKL.decode)
+* `ModelPatcher.patch_model` (real weight delta application + backup)
+* `ModelPatcher.unpatch_model` (restore from backup)
+* `sampler_object()` (returns KSAMPLER instance)
+* `KSAMPLER.sample` (diffusers scheduler loop + batched CFG)
+* `load_checkpoint_guess_config` (SD1.5 → tuple)
+* `_common_ksampler` helper used by `KSampler`/`KSamplerAdvanced`
+
+### Wheel metrics — Phase 1
+
+| Metric | Phase 0 | Phase 1 | Δ |
+|---|---|---|---|
+| Wheel size | 122 KB | **131 KB** | +9 KB (new helper files) |
+| Files in wheel | 94 | 97 | +3 |
+| `_vendor` entries | 1 (bridge) | 1 (bridge) | 0 |
+
+### Standalone wheel smoke test — Phase 1
+
+Command: `COMFY_RUNTIME_TEST_WHEEL=1 pytest tests/integration/test_wheel_standalone.py`
+
+```
+build wheel → uv venv /tmp/venv --python 3.12
+uv pip install --python /tmp/venv/bin/python dist/*.whl
+/tmp/venv/bin/python -c "
+  CLIPTextEncode → KSampler → VAEDecode through the MIT compat layer
+  with a random-init diffusers UNet/VAE/CLIP built in-process.
+"
+```
+
+Result: **PASSED in 13.36 s**.  Output: `OK image=(1, 16, 16, 3)`.
+
+Proves: a fresh venv with `pip install comfy-runtime` alone runs the SD1.5
+happy path without the `_vendor_bridge` fallback kicking in and without any
+GPL code on the machine.
+
+### Still on the bridge (Phase 2-4 targets)
+
+`compat/nodes.py` nodes that still delegate to `_vendor_bridge`:
+
+| Node | Target phase |
+|---|---|
+| `UNETLoader` | Phase 2 (Task 2.2 Flux) |
+| `CLIPLoader` | Phase 2 (Task 2.3 SDXL dual-encoder) |
+| `LoraLoader` | Phase 2 (Task 2.4 peft integration) |
+| `ControlNetLoader` / `ControlNetApply*` | Phase 2 (Task 2.5) |
+
+7 of 23 nodes are MIT-pure after Phase 1:
+`CheckpointLoaderSimple`, `CLIPTextEncode`, `KSampler`, `KSamplerAdvanced`,
+`EmptyLatentImage`, `VAEDecode`, `VAEEncode`.
+
+---
