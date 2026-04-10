@@ -1,0 +1,9 @@
+stages:
+  load_input:
+    - LoadImage
+  model_load:
+    - UpscaleModelLoader
+  upscale:
+    - ImageUpscaleWithModel
+  save:
+    - SaveImage

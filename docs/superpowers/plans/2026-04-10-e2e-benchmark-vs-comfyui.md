@@ -31,9 +31,15 @@
 
 ```
 benchmarks/e2e/
-├── pyproject.runtime.toml                      # uv project — runtime venv
-├── pyproject.comfyui.toml                      # uv project — comfyui venv
-├── .gitignore                                  # ignore .venv-*, results/
+├── runtime-env/                                # uv project — comfy_runtime side
+│   ├── pyproject.toml
+│   ├── uv.lock
+│   └── .venv/                                  # gitignored
+├── comfyui-env/                                # uv project — upstream ComfyUI side
+│   ├── pyproject.toml
+│   ├── uv.lock
+│   └── .venv/                                  # gitignored
+├── .gitignore                                  # ignores runtime-env/.venv/, comfyui-env/.venv/, results/
 ├── _harness/
 │   ├── __init__.py
 │   ├── result_schema.py                        # dataclasses for JSON schema
@@ -97,7 +103,7 @@ docs/benchmarks/                                # populated by aggregate.py (not
 
 ### Modified files
 
-- `.gitignore` — add `benchmarks/e2e/.venv-runtime/`, `benchmarks/e2e/.venv-comfyui/`, `benchmarks/e2e/results/`
+- `benchmarks/e2e/.gitignore` — ignores `runtime-env/.venv/`, `comfyui-env/.venv/`, `results/`, `__pycache__/`, `*.pyc`
 - `pyproject.toml` — no change (benchmarks/e2e/ has its own pyproject files; tests depend on already-present `pytest`)
 
 ### Responsibility split

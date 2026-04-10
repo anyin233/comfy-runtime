@@ -1,0 +1,17 @@
+stages:
+  model_load:
+    - CheckpointLoaderSimple
+  load_input:
+    - LoadImage
+  vae_encode:
+    - VAEEncode
+  noise_mask:
+    - SetLatentNoiseMask
+  text_encode:
+    - CLIPTextEncode
+  sample:
+    - KSampler
+  decode:
+    - VAEDecode
+  save:
+    - SaveImage

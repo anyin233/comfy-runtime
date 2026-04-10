@@ -1,0 +1,16 @@
+[project]
+name = "comfy-runtime-e2e-bench-runtime-side"
+version = "0.0.0"
+description = "Runtime-side venv for comfy_runtime vs ComfyUI e2e benchmark"
+requires-python = ">=3.10"
+dependencies = [
+  "comfy-runtime",
+  "huggingface_hub",
+  "PyYAML",
+  "matplotlib",
+  "Jinja2",
+  "spandrel",
+]
+
+[tool.uv.sources]
+comfy-runtime = { path = "../../..", editable = true }

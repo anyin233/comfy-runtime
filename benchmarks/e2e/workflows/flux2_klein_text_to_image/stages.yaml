@@ -1,0 +1,20 @@
+stages:
+  model_load:
+    - UNETLoader
+    - CLIPLoader
+    - VAELoader
+  text_encode:
+    - CLIPTextEncode
+  guider:
+    - CFGGuider
+  sampler_prep:
+    - KSamplerSelect
+    - Flux2Scheduler
+    - EmptyFlux2LatentImage
+    - RandomNoise
+  sample:
+    - SamplerCustomAdvanced
+  decode:
+    - VAEDecode
+  save:
+    - SaveImage

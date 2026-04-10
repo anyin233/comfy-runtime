@@ -1,0 +1,16 @@
+stages:
+  model_load:
+    - CheckpointLoaderSimple
+  text_encode:
+    - CLIPTextEncode
+  conditioning:
+    - ConditioningSetArea
+    - ConditioningCombine
+  latent_init:
+    - EmptyLatentImage
+  sample:
+    - KSampler
+  decode:
+    - VAEDecode
+  save:
+    - SaveImage

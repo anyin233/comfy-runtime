@@ -1,0 +1,118 @@
+{
+  "workflow": "hires_fix",
+  "side": "comfyui",
+  "run_idx": 2,
+  "status": "ok",
+  "error": null,
+  "total_ns": 3728653314,
+  "stages": [
+    {
+      "name": "model_load",
+      "elapsed_ns": 660636561,
+      "node_count": 1
+    },
+    {
+      "name": "text_encode",
+      "elapsed_ns": 121328358,
+      "node_count": 2
+    },
+    {
+      "name": "latent_init",
+      "elapsed_ns": 217884,
+      "node_count": 1
+    },
+    {
+      "name": "sample",
+      "elapsed_ns": 2544770522,
+      "node_count": 2
+    },
+    {
+      "name": "upscale_latent",
+      "elapsed_ns": 210503,
+      "node_count": 1
+    },
+    {
+      "name": "decode",
+      "elapsed_ns": 260704040,
+      "node_count": 1
+    },
+    {
+      "name": "save",
+      "elapsed_ns": 139153279,
+      "node_count": 1
+    }
+  ],
+  "nodes": [
+    {
+      "class_type": "CheckpointLoaderSimple",
+      "call_index": 0,
+      "elapsed_ns": 660636561
+    },
+    {
+      "class_type": "EmptyLatentImage",
+      "call_index": 0,
+      "elapsed_ns": 217884
+    },
+    {
+      "class_type": "CLIPTextEncode",
+      "call_index": 0,
+      "elapsed_ns": 107934548
+    },
+    {
+      "class_type": "CLIPTextEncode",
+      "call_index": 1,
+      "elapsed_ns": 13393810
+    },
+    {
+      "class_type": "KSampler",
+      "call_index": 0,
+      "elapsed_ns": 1099047502
+    },
+    {
+      "class_type": "LatentUpscale",
+      "call_index": 0,
+      "elapsed_ns": 210503
+    },
+    {
+      "class_type": "KSampler",
+      "call_index": 1,
+      "elapsed_ns": 1445723020
+    },
+    {
+      "class_type": "VAEDecode",
+      "call_index": 0,
+      "elapsed_ns": 260704040
+    },
+    {
+      "class_type": "SaveImage",
+      "call_index": 0,
+      "elapsed_ns": 139153279
+    }
+  ],
+  "gpu_peak_allocated_bytes": 4491749376,
+  "gpu_peak_reserved_bytes": 5534384128,
+  "host_vmhwm_bytes": 7356706816,
+  "env": {
+    "hostname": "jazz1",
+    "timestamp_utc": "2026-04-10T13:24:14.125412Z",
+    "python_version": "3.13.7",
+    "platform": "Linux-5.15.0-174-generic-x86_64-with-glibc2.35",
+    "driver_version": "580.65.06",
+    "comfyui_commit": "b615af1c",
+    "comfy_runtime_version": "0.3.1",
+    "argv": [
+      "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e/runners/comfyui_runner.py",
+      "--workflow",
+      "hires_fix",
+      "--run-idx",
+      "2",
+      "--out",
+      "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e/results/20260410T132106Z/hires_fix_comfyui_2.json"
+    ],
+    "cwd": "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e",
+    "torch_version": "2.11.0+cu130",
+    "cuda_version": "13.0",
+    "gpu_name": "NVIDIA GeForce RTX 4090",
+    "gpu_memory_total_mb": 24080
+  }
+}

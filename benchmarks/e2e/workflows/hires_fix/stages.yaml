@@ -1,0 +1,15 @@
+stages:
+  model_load:
+    - CheckpointLoaderSimple
+  text_encode:
+    - CLIPTextEncode
+  latent_init:
+    - EmptyLatentImage
+  sample:
+    - KSampler
+  upscale_latent:
+    - LatentUpscale
+  decode:
+    - VAEDecode
+  save:
+    - SaveImage
