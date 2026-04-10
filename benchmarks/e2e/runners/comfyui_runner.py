@@ -24,13 +24,20 @@ COMFYUI_PATH = "/home/yanweiye/Project/ComfyUI"
 if COMFYUI_PATH not in sys.path:
     sys.path.insert(0, COMFYUI_PATH)
 
+# Bootstrap sys.path so `benchmarks.e2e._harness.*` imports resolve when this
+# module is launched as a subprocess from a venv that does not have the
+# worktree root on PYTHONPATH.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 from benchmarks.e2e._harness.env import gather_env
 from benchmarks.e2e._harness.memory import read_gpu_peak, read_vmhwm, reset_gpu_peak
 from benchmarks.e2e._harness.result_schema import RunResult, run_result_to_dict
 from benchmarks.e2e._harness.timing import NodeRecorder, StageRecorder
 
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = _REPO_ROOT
 
 
 class MockServer:

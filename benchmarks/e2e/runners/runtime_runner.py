@@ -17,6 +17,13 @@ import traceback
 from pathlib import Path
 from typing import Any
 
+# Bootstrap sys.path so `benchmarks.e2e._harness.*` imports resolve when this
+# module is launched as a subprocess from a venv that does not have the
+# worktree root on PYTHONPATH.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 import yaml
 
 from benchmarks.e2e._harness.env import gather_env
@@ -28,7 +35,7 @@ from benchmarks.e2e._harness.result_schema import (
 from benchmarks.e2e._harness.timing import NodeRecorder, StageRecorder
 
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = _REPO_ROOT
 
 
 def _load_stages(stages_yaml: Path) -> dict[str, list[str]]:
