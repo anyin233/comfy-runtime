@@ -104,10 +104,14 @@ class TestSD15TextToImage:
         assert "samples" in latent
         assert latent["samples"].shape == (1, 4, 64, 64)
 
-    def test_checkpoint_loader_raises_not_implemented(self):
+    def test_checkpoint_loader_raises_when_file_missing(self):
+        """After the MIT rewrite the loader is implemented, so calling
+        it with a nonexistent file should surface a 'file not found'
+        error rather than a NotImplementedError."""
         _configure("sd15_text_to_image")
         with pytest.raises(
-            comfy_runtime.NodeExecutionError, match="not yet implemented|not found"
+            comfy_runtime.NodeExecutionError,
+            match="not found|does not exist|No such file",
         ):
             comfy_runtime.execute_node(
                 "CheckpointLoaderSimple",
@@ -213,10 +217,14 @@ class TestFlux2KleinTextToImage:
         input_types = cls.INPUT_TYPES()
         assert "required" in input_types
 
-    def test_unet_loader_raises_not_implemented(self):
+    def test_unet_loader_raises_when_file_missing(self):
+        """After the MIT rewrite the loader is implemented, so calling
+        it with a nonexistent file should surface a 'file not found'
+        error rather than a NotImplementedError."""
         _configure("flux2_klein_text_to_image")
         with pytest.raises(
-            comfy_runtime.NodeExecutionError, match="not yet implemented|not found"
+            comfy_runtime.NodeExecutionError,
+            match="not found|does not exist|No such file",
         ):
             comfy_runtime.execute_node(
                 "UNETLoader",
@@ -503,12 +511,16 @@ class TestModuleArchitecture:
         for mod_name in ["comfy.cli_args"]:
             assert mod_name in sys.modules, f"Missing module: {mod_name}"
 
-    def test_configure_activates_vendor_bridge(self):
-        """After configure(), vendor modules are available for inference."""
+    def test_configure_makes_compat_samplers_importable(self):
+        """After configure(), ``import comfy.samplers`` resolves to the
+        compat module (the vendor bridge is gone) and the module exposes
+        KSampler for downstream workflow code."""
         import comfy_runtime
 
         _configure("sd15_text_to_image")
-        # After configure, comfy.samplers should have KSampler with SAMPLERS
         import comfy.samplers
 
         assert hasattr(comfy.samplers, "KSampler")
+        # The module must resolve to the compat implementation, not any
+        # leftover vendor file.
+        assert "compat" in comfy.samplers.__file__

@@ -11,6 +11,11 @@ from typing import Any, Dict, Optional
 
 import torch
 
+# Re-export model_sampling at the module level so
+# ``from comfy.model_base import model_sampling`` works — ComfyUI
+# custom nodes (e.g. AnimateDiff-Evolved) depend on this convention.
+from comfy_runtime.compat.comfy import model_sampling  # noqa: F401
+
 logger = logging.getLogger(__name__)
 
 
@@ -309,6 +314,24 @@ class SVD_img2vid(BaseModel):
             device: Target device.
             unet_model: Pre-built UNet.
         """
+        super().__init__(model_config, model_type, device, unet_model)
+
+
+class SD21UNCLIP(BaseModel):
+    """Stable Diffusion 2.1 unCLIP variant.
+
+    Import-compat stub: custom nodes (e.g. AnimateDiff-Evolved) reference
+    this name at import time so we need it to exist as a class.  A full
+    implementation would override the image-conditioning forward path;
+    since no current compat-layer path materializes a real SD2.1-UNCLIP
+    model, this stub is sufficient for name resolution.
+    """
+
+    model_type = ModelType.V_PREDICTION
+
+    def __init__(
+        self, model_config=None, model_type=None, device=None, unet_model=None
+    ):
         super().__init__(model_config, model_type, device, unet_model)
 
 

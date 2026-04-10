@@ -842,6 +842,67 @@ class ImageBatch:
         return (torch.cat((image1, image2), dim=0),)
 
 
+class ImageScaleToTotalPixels:
+    """Scale an image so its total pixel count matches the requested
+    megapixel target.
+
+    Built-in ComfyUI node from ``comfy_extras/nodes_post_processing.py``.
+    Workflows (Flux2 in particular) reference it heavily.
+
+    The optional ``resolution_steps`` argument quantizes both the new
+    width and height to multiples of that value — newer Flux nodes
+    pass ``resolution_steps=64`` so the latent shape is divisible
+    by the patch size.
+    """
+
+    UPSCALE_METHODS = ["nearest-exact", "bilinear", "area", "bislerp", "lanczos"]
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "upscale_method": (s.UPSCALE_METHODS,),
+                "megapixels": (
+                    "FLOAT",
+                    {"default": 1.0, "min": 0.01, "max": 16.0, "step": 0.01},
+                ),
+            },
+            "optional": {
+                "resolution_steps": (
+                    "INT",
+                    {"default": 1, "min": 1, "max": 1024, "step": 1},
+                ),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "upscale"
+    CATEGORY = "image/upscaling"
+
+    def upscale(self, image, upscale_method, megapixels, resolution_steps: int = 1):
+        import math
+        import comfy.utils
+
+        samples = image.movedim(-1, 1)
+        total_target = int(megapixels * 1024 * 1024)
+        h, w = samples.shape[-2], samples.shape[-1]
+        scale = math.sqrt(total_target / (h * w))
+        new_h = max(1, round(h * scale))
+        new_w = max(1, round(w * scale))
+
+        # Quantize to a multiple of resolution_steps (e.g. 64 for Flux)
+        step = max(1, int(resolution_steps))
+        new_h = max(step, (new_h // step) * step)
+        new_w = max(step, (new_w // step) * step)
+
+        s = comfy.utils.common_upscale(
+            samples, new_w, new_h, upscale_method, "disabled"
+        )
+        s = s.movedim(1, -1)
+        return (s,)
+
+
 # ---------------------------------------------------------------------------
 # Register all built-in nodes
 # ---------------------------------------------------------------------------
@@ -869,6 +930,7 @@ NODE_CLASS_MAPPINGS = {
     "SaveImage": SaveImage,
     "PreviewImage": PreviewImage,
     "ImageScale": ImageScale,
+    "ImageScaleToTotalPixels": ImageScaleToTotalPixels,
     "ImageBatch": ImageBatch,
 }
 

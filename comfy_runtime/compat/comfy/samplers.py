@@ -1,11 +1,11 @@
 """Sampler and scheduler definitions for comfy_runtime.
 
-MIT reimplementation of comfy.samplers — provides sampler/scheduler name
-lists, sigma schedule computation, and stub sampler/guider classes that
-nodes can instantiate and configure.
-
-Actual sampling algorithms are deferred to Phase 3; this module provides
-the structural API surface that comfy_extras nodes depend on.
+MIT reimplementation of comfy.samplers — provides the full sampler and
+scheduler name lists, sigma schedule computation, KSAMPLER (backed by
+diffusers schedulers), and the stub guider classes the compat nodes
+use.  Most sampling actually happens via
+:class:`comfy_runtime.compat.comfy.samplers.KSAMPLER` which runs a
+diffusers scheduler loop.
 """
 
 import logging
@@ -15,6 +15,59 @@ from typing import Any, Callable, Dict, List, Optional, Set
 import torch
 
 logger = logging.getLogger(__name__)
+
+
+def sampling_function(
+    model,
+    x,
+    timestep,
+    uncond,
+    cond,
+    cond_scale,
+    model_options=None,
+    seed=None,
+):
+    """Per-step CFG noise prediction — import-compat stub.
+
+    Custom nodes (e.g. ComfyUI-KJNodes) reference
+    ``comfy.samplers.sampling_function`` at import time to hook into
+    the CFG pass.  The compat implementation here performs the
+    standard classifier-free guidance combination::
+
+        uncond_pred = model(x, t, cond=uncond)
+        cond_pred   = model(x, t, cond=cond)
+        return uncond_pred + cond_scale * (cond_pred - uncond_pred)
+
+    This mirrors ComfyUI's ``comfy.samplers.sampling_function``
+    contract.  Nodes that only import this symbol (without calling
+    it) simply get a successful ``from comfy.samplers import
+    sampling_function`` at load time.
+    """
+    if model is None:
+        raise RuntimeError("sampling_function requires a model")
+
+    # cond / uncond in ComfyUI are lists of [[cond_tensor, extras], ...].
+    # For the compat stub we extract the first entry's tensor.
+    def _extract(c):
+        if c is None:
+            return None
+        if isinstance(c, list) and c and isinstance(c[0], (list, tuple)):
+            return c[0][0]
+        return c
+
+    cond_t = _extract(cond)
+    uncond_t = _extract(uncond)
+
+    with torch.no_grad():
+        if uncond_t is not None and cond_scale > 1.0:
+            # Batched CFG: one forward pass on concatenated uncond+cond
+            batched = torch.cat([uncond_t, cond_t], dim=0)
+            x_in = torch.cat([x, x], dim=0)
+            noise_pred = model(x_in, timestep, encoder_hidden_states=batched).sample
+            uncond_pred, cond_pred = noise_pred.chunk(2)
+            return uncond_pred + cond_scale * (cond_pred - uncond_pred)
+        # cfg<=1 or missing uncond: just the cond pass
+        return model(x, timestep, encoder_hidden_states=cond_t).sample
 
 # ---------------------------------------------------------------------------
 # Name lists — authoritative sets of sampler/scheduler identifiers

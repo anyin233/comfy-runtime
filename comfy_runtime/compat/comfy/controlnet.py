@@ -1,9 +1,10 @@
 """ControlNet support for comfy_runtime.
 
 MIT reimplementation of comfy.controlnet — provides the ControlNet base
-class and loading stub that ComfyUI nodes use for conditional generation.
+class and loading function that ComfyUI nodes use for conditional generation.
 """
 
+import enum
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -12,9 +13,85 @@ import torch
 logger = logging.getLogger(__name__)
 
 
+class StrengthType(enum.Enum):
+    """ControlNet strength application mode.
+
+    ComfyUI's StrengthType enum lets nodes pick how the strength
+    multiplier is applied to the control signal:
+
+    * ``CONSTANT`` — multiply every block by ``strength``
+    * ``LINEAR_UP`` — ramp from 0 → strength across encoder blocks
+    """
+
+    CONSTANT = 0
+    LINEAR_UP = 1
+
+
+def broadcast_image_to(tensor: torch.Tensor, target_batch_size: int,
+                       batched_number: int = 1) -> torch.Tensor:
+    """Repeat ``tensor`` along its batch dim to match ``target_batch_size``.
+
+    ComfyUI's helper for replicating a ControlNet hint when the cond
+    batch size differs from the model's batch size.  Custom nodes
+    (AnimateDiff-Evolved) reference this name; the implementation
+    here is a straightforward repeat-or-truncate.
+    """
+    if tensor is None:
+        return tensor
+    if tensor.shape[0] == target_batch_size:
+        return tensor
+    if tensor.shape[0] < target_batch_size:
+        repeats = (target_batch_size + tensor.shape[0] - 1) // tensor.shape[0]
+        tensor = tensor.repeat(repeats, *([1] * (tensor.dim() - 1)))
+    return tensor[:target_batch_size]
+
+
 # ---------------------------------------------------------------------------
 # ControlBase
 # ---------------------------------------------------------------------------
+
+
+class ControlLora:
+    """Import-compat stub for ControlLora variants.
+
+    Custom nodes (e.g. ComfyUI-Advanced-ControlNet) reference several
+    ControlNet subclasses at module import time.  These stubs provide
+    the names so ``from comfy.controlnet import ControlLora`` succeeds
+    without having to ship full implementations.
+    """
+
+    pass
+
+
+class ControlNetSD35:
+    """Import-compat stub for the SD3.5 ControlNet variant."""
+
+    pass
+
+
+class ControlNetFlux:
+    """Import-compat stub for the Flux ControlNet variant."""
+
+    pass
+
+
+class T2IAdapter:
+    """Import-compat stub for the T2I-Adapter family.
+
+    T2I-Adapters are a lightweight alternative to ControlNets — they
+    inject conditioning by modifying intermediate UNet features rather
+    than running a full encoder.  ComfyUI-Advanced-ControlNet imports
+    this name at module-load time; this stub provides the symbol so
+    that import succeeds.
+    """
+
+    pass
+
+
+class ControlNetCustom:
+    """Import-compat stub for user-defined ControlNet variants."""
+
+    pass
 
 
 class ControlBase:

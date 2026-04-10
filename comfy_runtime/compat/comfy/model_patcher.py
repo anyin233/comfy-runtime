@@ -12,6 +12,11 @@ from typing import Any, Dict, Optional, Set
 import torch
 import torch.nn as nn
 
+# Re-export PatcherInjection for ComfyUI custom nodes (e.g.
+# AnimateDiff-Evolved) that import it from ``comfy.model_patcher``
+# instead of ``comfy.patcher_extension``.
+from comfy_runtime.compat.comfy.patcher_extension import PatcherInjection  # noqa: F401
+
 logger = logging.getLogger(__name__)
 
 

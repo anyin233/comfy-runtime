@@ -586,3 +586,76 @@ def deepcopy_list_dict(obj, memo=None):
         res = obj
     memo[obj_id] = res
     return res
+
+
+def tiled_scale_multidim(samples, function, tile=(64, 64), overlap=8,
+                         upscale_amount=4, out_channels=3, output_device="cpu",
+                         downscale=False, index_formulas=None, pbar=None):
+    """Tiled multi-dimensional scaling — import-compat shim.
+
+    Custom nodes (e.g. KJNodes) reference this function at import
+    time.  ComfyUI's original implementation runs ``function`` on
+    overlapping tiles of ``samples`` and stitches the outputs.  Our
+    compat shim performs only the simplest case (no tiling) — call
+    ``function`` directly on the full sample.  This is correct for
+    inputs that fit in a single tile and silently degrades to a
+    single forward pass for the others.
+    """
+    return function(samples)
+
+
+def tiled_scale(samples, function, tile_x=64, tile_y=64, overlap=8,
+                upscale_amount=4, out_channels=3, output_device="cpu", pbar=None):
+    """Single-dim tiled scaling — convenience wrapper around
+    :func:`tiled_scale_multidim`."""
+    return tiled_scale_multidim(
+        samples,
+        function,
+        tile=(tile_y, tile_x),
+        overlap=overlap,
+        upscale_amount=upscale_amount,
+        out_channels=out_channels,
+        output_device=output_device,
+        pbar=pbar,
+    )
+
+
+# ProgressBar alias — some custom nodes import it from comfy.utils.
+class ProgressBar:
+    """Minimal progress bar stub.
+
+    ComfyUI's ProgressBar emits SSE updates to a connected web UI.
+    The compat layer is headless — we provide the constructor and
+    update() method as no-ops so custom nodes that instantiate one
+    don't crash.
+    """
+
+    def __init__(self, total: int = 0):
+        self.total = int(total)
+        self.current = 0
+
+    def update(self, value: int = 1) -> None:
+        self.current += int(value)
+
+    def update_absolute(self, value: int, total: int = None,
+                        preview=None) -> None:
+        self.current = int(value)
+        if total is not None:
+            self.total = int(total)
+
+
+PROGRESS_BAR_ENABLED = False
+PROGRESS_BAR_HOOK = None
+
+
+# Import-compat key maps used by ComfyUI-Advanced-ControlNet and similar
+# state-dict introspection tooling.  In ComfyUI these are large lookup
+# tables built from the supported_models registry; the compat layer
+# exposes empty dicts so ``from comfy.utils import UNET_MAP_BASIC``
+# resolves successfully.  Custom nodes that actually iterate the maps
+# get a clear "no entries" result rather than an ImportError.
+UNET_MAP_BASIC = {}
+UNET_MAP_ATTENTIONS = {}
+UNET_MAP_RESNET = {}
+TRANSFORMER_BLOCKS = {}
+UNET_MAP_BASIC_FLUX = {}

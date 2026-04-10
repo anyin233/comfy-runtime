@@ -16,7 +16,7 @@ import sys
 _COMPAT_PKG = "comfy_runtime.compat"
 
 # Full packages — Python's PathFinder resolves submodule imports via __path__
-_PACKAGE_NAMES = ("comfy", "comfy_api", "comfy_execution")
+_PACKAGE_NAMES = ("comfy", "comfy_api", "comfy_execution", "comfy_extras")
 
 # Standalone modules — registered via a meta-path finder
 _STANDALONE_MODULES = (
