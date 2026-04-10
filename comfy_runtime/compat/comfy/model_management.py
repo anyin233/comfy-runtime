@@ -386,6 +386,27 @@ def dtype_size(dtype) -> int:
     return torch.tensor([], dtype=dtype).element_size()
 
 
+def module_size(module) -> int:
+    """Return the total byte size of a module's ``state_dict`` tensors.
+
+    Used by ComfyUI's upscale / controlnet helper nodes to estimate how
+    much VRAM to free before loading another model.  Matches the
+    implementation in upstream ``comfy.model_management.module_size``.
+
+    Args:
+        module: Any object with a ``state_dict()`` method (typically an
+            ``nn.Module``).
+
+    Returns:
+        Total bytes occupied by the module's parameters and buffers.
+    """
+    total = 0
+    sd = module.state_dict()
+    for k in sd:
+        total += sd[k].nbytes
+    return total
+
+
 def supports_dtype(device, dtype) -> bool:
     """Check if *device* supports *dtype*."""
     if dtype == torch.float32:

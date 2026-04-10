@@ -310,6 +310,7 @@ class KSAMPLER:
         disable_pbar: bool = False,
         seed: Optional[int] = None,
         control=None,
+        denoise: float = 1.0,
         **kwargs,
     ) -> torch.Tensor:
         """Run a diffusers scheduler loop through the ModelPatcher's UNet.
@@ -333,6 +334,15 @@ class KSAMPLER:
                 :meth:`ControlNet.get_control` is called per step to
                 produce ``down_block_residuals`` / ``mid_block_residual``
                 that get added to the UNet forward.
+            denoise: Denoise strength in ``(0, 1]``.  At ``1.0`` the
+                sampler runs the full sigma schedule (text2img / full
+                inpaint).  At ``0.75`` the first 25% of the schedule is
+                skipped — the starting latent is taken to be the
+                ``latent_image`` with noise added at the strength of the
+                starting timestep, matching diffusers' img2img
+                ``strength`` parameter.  ``0.0`` is handled by the
+                caller (``_common_ksampler`` short-circuits and returns
+                the input latent unchanged).
             **kwargs: Unused; reserved for forward compatibility.
 
         Returns:
@@ -371,7 +381,82 @@ class KSAMPLER:
         device = unet_param.device
         dtype = unet_param.dtype
 
-        latent = (latent_image + noise).to(device=device, dtype=dtype)
+        # Move both tensors to the target device/dtype *before* combining.
+        # img2img / inpainting hand us a CUDA ``latent_image`` from VAEEncode
+        # while ``_common_ksampler`` creates ``noise`` on CPU for determinism,
+        # so an eager ``latent_image + noise`` would raise with a device-mix
+        # error.  See tests/unit/test_mit_sampler_device_mixing.py.
+        latent_image_on_device = latent_image.to(device=device, dtype=dtype)
+        noise_on_device = noise.to(device=device, dtype=dtype)
+
+        # Honour the ``denoise`` parameter by trimming the scheduler's
+        # timestep schedule to its last ``ceil(num_steps * denoise)``
+        # entries — i.e. starting from a less-noisy state.  For
+        # ``denoise == 1.0`` this is a no-op.  See
+        # tests/unit/test_mit_sampler_denoise.py for the contract.
+        denoise = max(0.0, min(1.0, float(denoise)))
+        full_timesteps = scheduler.timesteps
+        start_idx = int(round(num_steps * (1.0 - denoise)))
+        # Guard: always keep at least one sampling step for ``denoise > 0``.
+        start_idx = max(0, min(num_steps - 1, start_idx))
+        trimmed_timesteps = full_timesteps[start_idx:]
+
+        # Initial latent construction.
+        #
+        # text2img happy path: ``latent_image`` is zeros and the sampler
+        # needs a latent at the scheduler's starting noise level.  Both
+        # ``zeros + noise`` and ``add_noise(zeros, noise, t0)`` give
+        # exactly the same result (add_noise reduces to
+        # ``x + noise * sigma_max`` when the scheduler's ``init_noise_sigma``
+        # equals the sigma at ``t0``), so we use the ``add_noise`` path
+        # unconditionally to get correct noise scaling for the inpainting
+        # and img2img cases where ``latent_image`` actually carries
+        # content.
+        #
+        # Exception: when ``denoise == 1.0`` on an empty (zero) latent —
+        # the text2img case — we preserve the legacy ``latent_image +
+        # noise`` path because the scheduler's ``init_noise_sigma`` is
+        # already applied by Euler's internal scaling and the output
+        # hash across the existing unit suite depends on the exact
+        # arithmetic.  For any denoise < 1 OR when the caller actually
+        # provided a latent (inpainting / img2img), go through the
+        # scheduler's add_noise which does the right thing.
+        is_empty_latent = bool(
+            latent_image_on_device.abs().max().item() == 0.0
+        )
+        if denoise >= 1.0 and is_empty_latent:
+            latent = latent_image_on_device + noise_on_device
+        else:
+            start_t = trimmed_timesteps[:1]
+            latent = scheduler.add_noise(
+                latent_image_on_device, noise_on_device, start_t
+            )
+
+        # Prepare the inpainting mask if one was supplied.  ComfyUI's
+        # convention: ``1`` marks the region to regenerate, ``0`` marks
+        # the region to leave as the source latent.  We interpolate the
+        # mask to the latent's spatial resolution (SetLatentNoiseMask
+        # stores it at pixel resolution) and cache a noisy-at-t version
+        # of the source latent per step so unmasked pixels track the
+        # forward diffusion trajectory of the *source* instead of the
+        # sampled latent.
+        mask_on_device = None
+        if denoise_mask is not None:
+            mask_t = denoise_mask.to(device=device, dtype=dtype)
+            # Normalise shape: expected ``(B, 1, H, W)`` at latent resolution.
+            if mask_t.dim() == 2:
+                mask_t = mask_t.unsqueeze(0).unsqueeze(0)
+            elif mask_t.dim() == 3:
+                mask_t = mask_t.unsqueeze(1)
+            # Downscale from pixel to latent resolution if needed (SD1.5
+            # latent is at 1/8 of image resolution).
+            lat_h, lat_w = latent.shape[-2], latent.shape[-1]
+            if mask_t.shape[-2:] != (lat_h, lat_w):
+                mask_t = torch.nn.functional.interpolate(
+                    mask_t, size=(lat_h, lat_w), mode="bilinear",
+                )
+            mask_on_device = mask_t.clamp(0.0, 1.0)
+
         if pos_cond is not None:
             pos_cond = pos_cond.to(device=device, dtype=dtype)
         if neg_cond is not None:
@@ -379,7 +464,7 @@ class KSAMPLER:
 
         do_cfg = cfg > 1.0 and neg_cond is not None
 
-        for i, t in enumerate(scheduler.timesteps):
+        for i, t in enumerate(trimmed_timesteps):
             # ControlNet residuals — recomputed per step because the
             # noisy latent changes.  See compat/comfy/controlnet.py.
             ctrl_kwargs = {}
@@ -423,6 +508,26 @@ class KSAMPLER:
 
             step_out = scheduler.step(noise_pred, t, latent)
             latent = step_out.prev_sample
+
+            # Inpainting blend: outside the mask the latent should
+            # track the source latent's forward-diffusion trajectory,
+            # not the sampled one.  We compute what the source latent
+            # would look like at the NEXT timestep and mix it in for
+            # the unmasked region.  On the final step there's no "next
+            # t" so we collapse to the source latent directly
+            # (clean, unnoised).
+            if mask_on_device is not None:
+                if i < len(trimmed_timesteps) - 1:
+                    next_t = trimmed_timesteps[i + 1:i + 2]
+                    source_at_next = scheduler.add_noise(
+                        latent_image_on_device, noise_on_device, next_t
+                    )
+                else:
+                    source_at_next = latent_image_on_device
+                latent = (
+                    mask_on_device * latent
+                    + (1.0 - mask_on_device) * source_at_next
+                )
 
             if callback is not None:
                 try:
@@ -512,7 +617,12 @@ class FluxKSAMPLER:
         cond_t = cond_t.to(device=device, dtype=dtype)
         pooled = pooled.to(device=device, dtype=dtype)
 
-        latent = (latent_image + noise).to(device=device, dtype=dtype)
+        # Same device-mix safety as KSAMPLER.sample: move both to the
+        # target device before combining so img2img / inpainting-style
+        # callers that pass a CUDA latent + CPU noise don't blow up.
+        latent_image_on_device = latent_image.to(device=device, dtype=dtype)
+        noise_on_device = noise.to(device=device, dtype=dtype)
+        latent = latent_image_on_device + noise_on_device
         batch_size = latent.shape[0]
         num_patches = latent.shape[1] if latent.dim() == 3 else (
             latent.shape[-1] * latent.shape[-2]

@@ -46,6 +46,24 @@ def _common_ksampler(
     from comfy_runtime.compat.comfy import samplers
 
     latent_samples = latent_image["samples"]
+    noise_mask = latent_image.get("noise_mask")
+
+    # ``denoise == 0`` means "no sampling at all — return the input
+    # unchanged".  Used by workflows that want to run the graph but skip
+    # the diffusion pass (e.g. caching probes).
+    if denoise <= 0.0:
+        out = latent_image.copy()
+        out["samples"] = latent_samples
+        return (out,)
+
+    # Inpainting short-circuit: if the noise_mask is all zeros, the
+    # sampler would be a no-op in the masked region (none) and a
+    # blend-back in the unmasked region.  Return the source latent
+    # untouched.  Saves a full sampling pass for degenerate masks.
+    if noise_mask is not None and float(noise_mask.sum()) == 0.0:
+        out = latent_image.copy()
+        out["samples"] = latent_samples
+        return (out,)
 
     if disable_noise:
         noise = torch.zeros_like(latent_samples)
@@ -71,6 +89,8 @@ def _common_ksampler(
         sigmas=sigmas,
         disable_pbar=True,
         seed=seed,
+        denoise=float(denoise),
+        denoise_mask=noise_mask,
     )
 
     out = latent_image.copy()
