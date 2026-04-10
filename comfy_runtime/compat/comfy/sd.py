@@ -63,18 +63,30 @@ class CLIP:
         load_device=None,
         offload_device=None,
         patcher=None,
+        clip_model2=None,
+        tokenizer2=None,
     ):
         """Initialize CLIP wrapper.
 
         Args:
-            clip_model: The text encoder model.
-            tokenizer: Text tokenizer.
-            load_device: Device for running inference.
+            clip_model:    Primary text encoder (CLIP-L for SD1/SDXL,
+                CLIP-L for Flux, CLIP-L for SD3).
+            tokenizer:     Tokenizer for ``clip_model``.
+            load_device:   Device for running inference.
             offload_device: Device for weight offloading.
-            patcher: Optional ModelPatcher for the clip model.
+            patcher:       Optional ModelPatcher for ``clip_model``.
+            clip_model2:   Secondary text encoder for dual-encoder
+                checkpoints.  ``OpenCLIPG`` for SDXL, ``T5-XXL`` for
+                Flux / SD3.  ``None`` for single-encoder SD1.5.
+            tokenizer2:    Tokenizer for ``clip_model2``.  When
+                ``None`` and ``clip_model2`` is set, ``tokenizer`` is
+                re-used (which is the SDXL convention — both encoders
+                share the CLIP BPE tokenizer).
         """
         self.clip_model = clip_model
+        self.clip_model2 = clip_model2
         self.tokenizer = tokenizer
+        self.tokenizer2 = tokenizer2 or tokenizer
         self.patcher = patcher
         self.load_device = load_device or torch.device("cpu")
         self.offload_device = offload_device or torch.device("cpu")
@@ -85,11 +97,14 @@ class CLIP:
         """Create a clone of this CLIP wrapper.
 
         Returns:
-            New CLIP instance sharing the model but with independent state.
+            New CLIP instance sharing the underlying models but with
+            independent patcher state.
         """
         cloned = CLIP.__new__(CLIP)
         cloned.clip_model = self.clip_model
+        cloned.clip_model2 = getattr(self, "clip_model2", None)
         cloned.tokenizer = self.tokenizer
+        cloned.tokenizer2 = getattr(self, "tokenizer2", self.tokenizer)
         cloned.load_device = self.load_device
         cloned.offload_device = self.offload_device
         cloned.layer_idx = self.layer_idx
@@ -103,53 +118,40 @@ class CLIP:
     def tokenize(self, text: str, return_word_ids: bool = False):
         """Tokenize text into ComfyUI's chunked-weighted format.
 
+        Returns a dict with a ``"l"`` slot always, and additionally a
+        ``"g"`` slot when :attr:`clip_model2` is set (SDXL dual encoder).
+
         Args:
             text: Input text string.
-            return_word_ids: Ignored in Phase 1 (attention-weighted prompts
-                are Phase 2); kept for API parity.
-
-        Returns:
-            ``{"l": [[(id, weight), ...77...], ...]}``.
+            return_word_ids: Ignored in Phase 2 (attention-weighted prompts
+                are Phase 3); kept for API parity.
         """
         from comfy_runtime.compat.comfy._tokenizer import tokenize_to_comfy_format
 
         if self.tokenizer is None:
             raise RuntimeError("CLIP.tokenize requires self.tokenizer to be set")
-        return tokenize_to_comfy_format(
+
+        tokens = tokenize_to_comfy_format(
             self.tokenizer, text, max_length=77, slot="l"
         )
+        if getattr(self, "clip_model2", None) is not None:
+            tok2 = self.tokenizer2 or self.tokenizer
+            tokens.update(
+                tokenize_to_comfy_format(tok2, text, max_length=77, slot="g")
+            )
+        return tokens
 
-    def encode_from_tokens(
-        self, tokens, return_pooled: bool = False, return_dict: bool = False
-    ):
-        """Run the CLIP text encoder over tokenized chunks.
+    def _encode_slot(self, model, chunks) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Run a single text encoder over a list of token chunks.
 
-        Args:
-            tokens: ``{"l": [[(id, weight), ...77...], ...]}`` from
-                :meth:`tokenize`.
-            return_pooled: Also return the pooled [CLS] embedding.
-            return_dict: Return a dict ``{"cond": ..., "pooled_output": ...}``.
-
-        Returns:
-            Embedding tensor of shape ``(B, 77*num_chunks, hidden_size)``,
-            optionally paired with the pooled output or wrapped in a dict.
+        Returns ``(cat_hidden, pooled)`` where ``cat_hidden`` has shape
+        ``(1, 77 * num_chunks, hidden_size)`` and ``pooled`` is the
+        final hidden state's pooled output (``pooler_output`` if
+        available, otherwise the first-token hidden).
         """
         from comfy_runtime.compat.comfy._tokenizer import tokens_to_input_ids
 
-        if self.clip_model is None:
-            raise RuntimeError(
-                "CLIP.encode_from_tokens requires self.clip_model to be set"
-            )
-
-        # Phase 1: only the "l" slot.  SDXL's "g" and Flux's "t5xxl" are Phase 2.
-        if "l" not in tokens:
-            raise KeyError(
-                f"Phase 1 only supports the 'l' slot; got {list(tokens.keys())}"
-            )
-
-        chunks = tokens["l"]
-        device = next(self.clip_model.parameters()).device
-
+        device = next(model.parameters()).device
         chunk_embeddings: List[torch.Tensor] = []
         pooled: Optional[torch.Tensor] = None
         for chunk in chunks:
@@ -157,29 +159,62 @@ class CLIP:
                 [tokens_to_input_ids(chunk)], dtype=torch.long, device=device
             )
             with torch.no_grad():
-                out = self.clip_model(
-                    input_ids=ids,
-                    output_hidden_states=True,
-                )
+                out = model(input_ids=ids, output_hidden_states=True)
             if self.layer_idx is not None:
                 hidden = out.hidden_states[self.layer_idx]
             else:
                 hidden = out.last_hidden_state
             chunk_embeddings.append(hidden)
             if pooled is None:
-                # CLIP pooled output is the [EOS] row of the last hidden state.
-                # We use the first token here for determinism with the tiny
-                # fixture (which has no real EOS).  Real CLIP models will
-                # diverge slightly; this is Phase 1 and good enough for the
-                # SD1.5 happy path.  Phase 2 will switch to pooler_output when
-                # available.
                 pooler = getattr(out, "pooler_output", None)
                 if pooler is not None:
                     pooled = pooler
                 else:
                     pooled = out.last_hidden_state[:, 0, :]
+        cat = torch.cat(chunk_embeddings, dim=1)
+        return cat, pooled
 
-        cond = torch.cat(chunk_embeddings, dim=1)
+    def encode_from_tokens(
+        self, tokens, return_pooled: bool = False, return_dict: bool = False
+    ):
+        """Run the text encoders over tokenized chunks.
+
+        When :attr:`clip_model2` is set (SDXL dual encoder), the ``"l"``
+        and ``"g"`` slot outputs are concatenated along the hidden dim
+        (shape ``(B, 77, hidden_l + hidden_g)``) and the pooled output
+        is taken from the ``"g"`` encoder only — matching the SDXL
+        conditioning contract used by diffusers'
+        ``StableDiffusionXLPipeline``.
+
+        Single-encoder (SD1.5) models return just the ``"l"`` output
+        unchanged, preserving Phase-1 semantics.
+
+        Args:
+            tokens:        ``{"l": [...]}`` or ``{"l": [...], "g": [...]}``.
+            return_pooled: Also return the pooled embedding.
+            return_dict:   Return a dict ``{"cond": ..., "pooled_output": ...}``.
+        """
+        if self.clip_model is None:
+            raise RuntimeError(
+                "CLIP.encode_from_tokens requires self.clip_model to be set"
+            )
+
+        if "l" not in tokens:
+            raise KeyError(
+                f"Expected at least the 'l' slot; got {list(tokens.keys())}"
+            )
+
+        l_cond, l_pooled = self._encode_slot(self.clip_model, tokens["l"])
+
+        g_model = getattr(self, "clip_model2", None)
+        if g_model is not None and "g" in tokens:
+            g_cond, g_pooled = self._encode_slot(g_model, tokens["g"])
+            # SDXL: concat along hidden dim; pooled from G only.
+            cond = torch.cat([l_cond, g_cond], dim=-1)
+            pooled = g_pooled
+        else:
+            cond = l_cond
+            pooled = l_pooled
 
         if return_dict:
             return {"cond": cond, "pooled_output": pooled}
@@ -430,30 +465,52 @@ def load_checkpoint_guess_config(
 ):
     """Load a single-file checkpoint and wrap it in ComfyUI's tuple.
 
-    Detects the model family from the state-dict keys (Phase 1: SD1.5
-    only), loads the underlying diffusers + transformers modules, and
-    wraps them in :class:`ModelPatcher`, :class:`CLIP`, and :class:`VAE`.
+    Detects the model family from the state-dict keys and dispatches to
+    the family-specific loader:
+
+      * ``sd15`` → single CLIP-L encoder
+      * ``sdxl`` → dual encoder (CLIP-L + OpenCLIP-G)
+
+    The returned :class:`CLIP` wrapper transparently handles both cases
+    via the ``"l"``/``"g"`` slot mechanism.
 
     Args:
         ckpt_path: Path to the checkpoint file (``.safetensors`` or ``.ckpt``).
         output_vae: Return a VAE wrapper.
         output_clip: Return a CLIP wrapper.
-        output_clipvision: Return a CLIP vision wrapper (always None in Phase 1).
-        embedding_directory: Directory for text embeddings (unused in Phase 1).
+        output_clipvision: Return a CLIP vision wrapper (always None for now).
+        embedding_directory: Unused; accepted for API compat with ComfyUI.
         output_model: Return the UNet wrapped in a ModelPatcher.
-        model_options: Additional loading options (unused in Phase 1).
+        model_options: Additional loading options (unused).
 
     Returns:
-        ``(model, clip, vae, clipvision)`` — any entry may be ``None``
-        according to the output_* flags.
+        ``(model, clip, vae, clipvision)`` — any entry may be ``None``.
 
     Raises:
         ValueError: If the state dict doesn't match any supported family.
     """
-    from comfy_runtime.compat.comfy._diffusers_loader import load_sd15_single_file
+    from comfy_runtime.compat.comfy._diffusers_loader import load_single_file
     from comfy_runtime.compat.comfy.model_patcher import ModelPatcher
 
-    unet, vae_mod, text_encoder, tokenizer = load_sd15_single_file(ckpt_path)
+    loaded = load_single_file(ckpt_path)
+    family = loaded[0]
+
+    if family == "sd15":
+        _, unet, vae_mod, text_encoder, tokenizer = loaded
+        clip = None
+        if output_clip:
+            clip = CLIP(clip_model=text_encoder, tokenizer=tokenizer)
+    elif family == "sdxl":
+        _, unet, vae_mod, te_l, te_g, tokenizer = loaded
+        clip = None
+        if output_clip:
+            clip = CLIP(
+                clip_model=te_l,
+                tokenizer=tokenizer,
+                clip_model2=te_g,
+            )
+    else:
+        raise NotImplementedError(f"family {family!r} loading not implemented")
 
     model = None
     if output_model:
@@ -461,13 +518,6 @@ def load_checkpoint_guess_config(
             unet,
             load_device=torch.device("cpu"),
             offload_device=torch.device("cpu"),
-        )
-
-    clip = None
-    if output_clip:
-        clip = CLIP(
-            clip_model=text_encoder,
-            tokenizer=tokenizer,
         )
 
     vae_wrapper = None

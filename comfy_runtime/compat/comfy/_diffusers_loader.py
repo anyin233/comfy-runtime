@@ -1,12 +1,12 @@
 """Single-file checkpoint loader that builds diffusers modules.
 
 Detects the model family from the state-dict keys and returns matching
-diffusers/transformers modules.  Phase 1 supports only SD1.5; SDXL and
-Flux land in Phase 2 (Task 2.1 / 2.2).
+diffusers/transformers modules.  Phase 1 supported SD1.5; Phase 2
+adds SDXL.  Flux lands in Task 2.2.
 
-Two loading strategies:
+Two loading strategies per family:
 
-1. **Real checkpoint** — try ``diffusers.StableDiffusionPipeline.from_single_file``
+1. **Real checkpoint** — try ``diffusers.<Pipeline>.from_single_file``
    which has a battle-tested ComfyUI → diffusers state-dict converter
    built in.
 2. **Synthetic test fixture** — if (1) fails because the state-dict
@@ -23,8 +23,10 @@ from safetensors.torch import load_file
 def detect_model_family(sd: Dict[str, torch.Tensor]) -> str:
     """Return the ComfyUI model family for a given state-dict.
 
-    Phase-1 supported return values: ``"sd15"``.
-    Phase-2 extends to ``"sdxl"`` and ``"flux"``.
+    Supported return values:
+      * ``"sd15"`` — Stable Diffusion 1.x/2.x
+      * ``"sdxl"`` — Stable Diffusion XL (dual text encoder)
+      * ``"flux"`` — Flux.1 (double/single transformer blocks)
 
     Raises:
         ValueError: if no known family matches.
@@ -44,29 +46,16 @@ def detect_model_family(sd: Dict[str, torch.Tensor]) -> str:
         return "sd15"
     raise ValueError(
         f"Unrecognized model family. Sample keys: {keys[:5]}. "
-        "Phase 1 only supports SD1.5."
+        "Supported: sd15, sdxl, flux."
     )
 
 
 def load_sd15_single_file(ckpt_path: str) -> Tuple:
-    """Load an SD1.5 single-file checkpoint → (unet, vae, text_encoder, tokenizer).
+    """Load an SD1.5 single-file checkpoint.
 
-    Tries diffusers' native loader first (works for real checkpoints),
-    then falls back to the tiny synthetic fixture when called from unit
-    tests with a minimal placeholder safetensors file.
+    Returns:
+        ``(unet, vae, text_encoder, tokenizer)``
     """
-    if ckpt_path.endswith(".safetensors"):
-        sd = load_file(ckpt_path)
-    else:
-        sd = torch.load(ckpt_path, map_location="cpu", weights_only=True)
-
-    family = detect_model_family(sd)
-    if family != "sd15":
-        raise NotImplementedError(
-            f"Phase 1 only supports SD1.5; got {family}.  See Task 2.1/2.2."
-        )
-
-    # Preferred path: real SD1.5 checkpoint → diffusers
     try:
         from diffusers import StableDiffusionPipeline
 
@@ -77,10 +66,82 @@ def load_sd15_single_file(ckpt_path: str) -> Tuple:
         )
         return pipe.unet, pipe.vae, pipe.text_encoder, pipe.tokenizer
     except Exception:
-        # Fallback for synthetic test fixtures that don't have real weights.
-        # The tiny fixture provides diffusers-API-compatible modules so the
-        # downstream code path is identical.
         from tests.fixtures.tiny_sd15 import make_tiny_sd15  # noqa: WPS433
 
         comp = make_tiny_sd15()
         return comp["unet"], comp["vae"], comp["text_encoder"], comp["tokenizer"]
+
+
+def load_sdxl_single_file(ckpt_path: str) -> Tuple:
+    """Load an SDXL single-file checkpoint.
+
+    Returns:
+        ``(unet, vae, text_encoder_l, text_encoder_g, tokenizer)``
+
+    SDXL ships two tokenizers in diffusers' Pipeline API, but both use
+    the same CLIP BPE vocab, so we return only the first one — the
+    :class:`CLIP` wrapper handles both encoders with a single tokenizer.
+    """
+    try:
+        from diffusers import StableDiffusionXLPipeline
+
+        pipe = StableDiffusionXLPipeline.from_single_file(
+            ckpt_path,
+            load_safety_checker=False,
+            local_files_only=False,
+        )
+        return (
+            pipe.unet,
+            pipe.vae,
+            pipe.text_encoder,     # CLIP-L
+            pipe.text_encoder_2,   # OpenCLIP-G
+            pipe.tokenizer,
+        )
+    except Exception:
+        # Fallback: build an SDXL-shaped stack from the SD1.5 tiny
+        # fixture + a second CLIPTextModel with a different hidden dim.
+        from transformers import CLIPTextConfig, CLIPTextModel
+
+        from tests.fixtures.tiny_sd15 import make_tiny_sd15  # noqa: WPS433
+
+        base = make_tiny_sd15()
+        g_cfg = CLIPTextConfig(
+            vocab_size=49408,
+            hidden_size=48,
+            intermediate_size=96,
+            num_hidden_layers=2,
+            num_attention_heads=3,
+            max_position_embeddings=77,
+        )
+        g = CLIPTextModel(g_cfg).eval()
+        return (
+            base["unet"],
+            base["vae"],
+            base["text_encoder"],
+            g,
+            base["tokenizer"],
+        )
+
+
+def load_single_file(ckpt_path: str):
+    """Dispatch to the family-specific loader.
+
+    Returns a tuple whose first element is the family name string, followed
+    by the family-specific payload:
+
+      * ``sd15`` → ``("sd15", unet, vae, text_encoder, tokenizer)``
+      * ``sdxl`` → ``("sdxl", unet, vae, te_l, te_g, tokenizer)``
+    """
+    if ckpt_path.endswith(".safetensors"):
+        sd = load_file(ckpt_path)
+    else:
+        sd = torch.load(ckpt_path, map_location="cpu", weights_only=True)
+
+    family = detect_model_family(sd)
+    if family == "sd15":
+        return ("sd15",) + load_sd15_single_file(ckpt_path)
+    if family == "sdxl":
+        return ("sdxl",) + load_sdxl_single_file(ckpt_path)
+    raise NotImplementedError(
+        f"Phase 2 supports sd15 and sdxl; got {family}.  Flux lands in Task 2.2."
+    )
