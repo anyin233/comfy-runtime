@@ -504,25 +504,44 @@ def load_clip(
 def load_lora_for_models(
     model, clip, lora, strength_model: float, strength_clip: float
 ):
-    """Apply a LoRA to model and clip.
+    """Apply a LoRA to a model and CLIP via the ComfyUI clone semantics.
+
+    ComfyUI nodes expect ``LoraLoader`` to return **new** ModelPatcher /
+    CLIP objects with the LoRA patches registered, leaving the input
+    model/clip untouched.  We clone them, register the deltas, and rely
+    on the caller's next :meth:`ModelPatcher.patch_model` call to
+    actually mutate the weights.
 
     Args:
-        model: ModelPatcher for the diffusion model.
-        clip: CLIP wrapper.
-        lora: LoRA state dict or path.
-        strength_model: LoRA strength for the model.
-        strength_clip: LoRA strength for CLIP.
+        model: Source :class:`ModelPatcher` (or None).
+        clip: Source :class:`CLIP` wrapper (or None).
+        lora: A ComfyUI-format LoRA state dict, already loaded from disk.
+        strength_model: Strength for the UNet side of the LoRA.
+        strength_clip: Strength for the CLIP side of the LoRA.
 
     Returns:
-        Tuple of (patched_model, patched_clip).
-
-    Raises:
-        NotImplementedError: Always (Phase 3 work).
+        ``(new_model_patcher, new_clip)`` — either may be ``None`` if the
+        caller passed ``None``.
     """
-    # TODO(Phase3): Implement LoRA application.
-    raise NotImplementedError(
-        "load_lora_for_models is a stub. LoRA loading will be implemented in Phase 3."
-    )
+    from comfy_runtime.compat.comfy._lora_peft import apply_lora_to_patcher
+
+    new_model = None
+    if model is not None:
+        new_model = model.clone()
+        apply_lora_to_patcher(new_model, lora, strength=float(strength_model))
+
+    new_clip = None
+    if clip is not None:
+        new_clip = clip.clone()
+        if new_clip.patcher is not None:
+            apply_lora_to_patcher(
+                new_clip.patcher, lora, strength=float(strength_clip)
+            )
+        # If no patcher is attached (Phase 1 CLIP wrappers are weight-patch
+        # lite), we silently skip the CLIP side.  SDXL / Flux will get
+        # dedicated CLIP patchers in Phase 2.
+
+    return new_model, new_clip
 
 
 def load_bypass_lora_for_models(

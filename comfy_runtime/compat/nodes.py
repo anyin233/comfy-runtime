@@ -257,16 +257,13 @@ class LoraLoader:
 
     def load_lora(self, model, clip, lora_name, strength_model, strength_clip):
         import folder_paths
-        from comfy_runtime.compat.comfy._vendor_bridge import _ensure_vendor_imports
-
-        _ensure_vendor_imports()
-        from comfy.sd import load_lora_for_models
-        from comfy.utils import load_torch_file
+        from comfy_runtime.compat.comfy.sd import load_lora_for_models
+        from comfy_runtime.compat.comfy.utils import load_torch_file
 
         lora_path = folder_paths.get_full_path_or_raise("loras", lora_name)
-        lora = load_torch_file(lora_path)
+        lora_sd = load_torch_file(lora_path)
         model_lora, clip_lora = load_lora_for_models(
-            model, clip, lora, strength_model, strength_clip
+            model, clip, lora_sd, strength_model, strength_clip
         )
         return (model_lora, clip_lora)
 
