@@ -1,0 +1,15 @@
+stages:
+  model_load:
+    - CheckpointLoaderSimple
+  load_input:
+    - LoadImage
+  text_encode:
+    - CLIPTextEncode
+  vae_encode:
+    - VAEEncode
+  sample:
+    - KSampler
+  decode:
+    - VAEDecode
+  save:
+    - SaveImage
