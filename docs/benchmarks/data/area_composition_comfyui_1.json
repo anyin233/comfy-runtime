@@ -1,0 +1,138 @@
+{
+  "workflow": "area_composition",
+  "side": "comfyui",
+  "run_idx": 1,
+  "status": "ok",
+  "error": null,
+  "total_ns": 3195253822,
+  "stages": [
+    {
+      "name": "model_load",
+      "elapsed_ns": 670210133,
+      "node_count": 1
+    },
+    {
+      "name": "text_encode",
+      "elapsed_ns": 146470094,
+      "node_count": 4
+    },
+    {
+      "name": "conditioning",
+      "elapsed_ns": 241014,
+      "node_count": 4
+    },
+    {
+      "name": "latent_init",
+      "elapsed_ns": 223964,
+      "node_count": 1
+    },
+    {
+      "name": "sample",
+      "elapsed_ns": 2163267984,
+      "node_count": 1
+    },
+    {
+      "name": "decode",
+      "elapsed_ns": 163587964,
+      "node_count": 1
+    },
+    {
+      "name": "save",
+      "elapsed_ns": 49302256,
+      "node_count": 1
+    }
+  ],
+  "nodes": [
+    {
+      "class_type": "CheckpointLoaderSimple",
+      "call_index": 0,
+      "elapsed_ns": 670210133
+    },
+    {
+      "class_type": "EmptyLatentImage",
+      "call_index": 0,
+      "elapsed_ns": 223964
+    },
+    {
+      "class_type": "CLIPTextEncode",
+      "call_index": 0,
+      "elapsed_ns": 108197999
+    },
+    {
+      "class_type": "CLIPTextEncode",
+      "call_index": 1,
+      "elapsed_ns": 13150204
+    },
+    {
+      "class_type": "ConditioningSetArea",
+      "call_index": 0,
+      "elapsed_ns": 68751
+    },
+    {
+      "class_type": "CLIPTextEncode",
+      "call_index": 2,
+      "elapsed_ns": 12472944
+    },
+    {
+      "class_type": "ConditioningSetArea",
+      "call_index": 1,
+      "elapsed_ns": 63621
+    },
+    {
+      "class_type": "CLIPTextEncode",
+      "call_index": 3,
+      "elapsed_ns": 12648947
+    },
+    {
+      "class_type": "ConditioningCombine",
+      "call_index": 0,
+      "elapsed_ns": 63672
+    },
+    {
+      "class_type": "ConditioningCombine",
+      "call_index": 1,
+      "elapsed_ns": 44970
+    },
+    {
+      "class_type": "KSampler",
+      "call_index": 0,
+      "elapsed_ns": 2163267984
+    },
+    {
+      "class_type": "VAEDecode",
+      "call_index": 0,
+      "elapsed_ns": 163587964
+    },
+    {
+      "class_type": "SaveImage",
+      "call_index": 0,
+      "elapsed_ns": 49302256
+    }
+  ],
+  "gpu_peak_allocated_bytes": 3055036416,
+  "gpu_peak_reserved_bytes": 3487563776,
+  "host_vmhwm_bytes": 7358005248,
+  "env": {
+    "hostname": "jazz1",
+    "timestamp_utc": "2026-04-10T13:01:22.626283Z",
+    "python_version": "3.13.7",
+    "platform": "Linux-5.15.0-174-generic-x86_64-with-glibc2.35",
+    "driver_version": "580.65.06",
+    "comfyui_commit": "b615af1c",
+    "comfy_runtime_version": "0.3.1",
+    "argv": [
+      "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e/runners/comfyui_runner.py",
+      "--workflow",
+      "area_composition",
+      "--run-idx",
+      "1",
+      "--out",
+      "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e/results/20260410T125727Z/area_composition_comfyui_1.json"
+    ],
+    "cwd": "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e",
+    "torch_version": "2.11.0+cu130",
+    "cuda_version": "13.0",
+    "gpu_name": "NVIDIA GeForce RTX 4090",
+    "gpu_memory_total_mb": 24080
+  }
+}

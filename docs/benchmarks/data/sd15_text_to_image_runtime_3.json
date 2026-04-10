@@ -1,0 +1,103 @@
+{
+  "workflow": "sd15_text_to_image",
+  "side": "runtime",
+  "run_idx": 3,
+  "status": "ok",
+  "error": null,
+  "total_ns": 3221721198,
+  "stages": [
+    {
+      "name": "model_load",
+      "elapsed_ns": 1286860976,
+      "node_count": 1
+    },
+    {
+      "name": "text_encode",
+      "elapsed_ns": 121805809,
+      "node_count": 2
+    },
+    {
+      "name": "latent_init",
+      "elapsed_ns": 67431,
+      "node_count": 1
+    },
+    {
+      "name": "sample",
+      "elapsed_ns": 1425427107,
+      "node_count": 1
+    },
+    {
+      "name": "decode",
+      "elapsed_ns": 145707749,
+      "node_count": 1
+    },
+    {
+      "name": "save",
+      "elapsed_ns": 35630161,
+      "node_count": 1
+    }
+  ],
+  "nodes": [
+    {
+      "class_type": "CheckpointLoaderSimple",
+      "call_index": 0,
+      "elapsed_ns": 1286860976
+    },
+    {
+      "class_type": "CLIPTextEncode",
+      "call_index": 0,
+      "elapsed_ns": 107815790
+    },
+    {
+      "class_type": "CLIPTextEncode",
+      "call_index": 1,
+      "elapsed_ns": 13990019
+    },
+    {
+      "class_type": "EmptyLatentImage",
+      "call_index": 0,
+      "elapsed_ns": 67431
+    },
+    {
+      "class_type": "KSampler",
+      "call_index": 0,
+      "elapsed_ns": 1425427107
+    },
+    {
+      "class_type": "VAEDecode",
+      "call_index": 0,
+      "elapsed_ns": 145707749
+    },
+    {
+      "class_type": "SaveImage",
+      "call_index": 0,
+      "elapsed_ns": 35630161
+    }
+  ],
+  "gpu_peak_allocated_bytes": 5250263552,
+  "gpu_peak_reserved_bytes": 5454692352,
+  "host_vmhwm_bytes": 7249997824,
+  "env": {
+    "hostname": "jazz1",
+    "timestamp_utc": "2026-04-10T12:57:48.643749Z",
+    "python_version": "3.13.7",
+    "platform": "Linux-5.15.0-174-generic-x86_64-with-glibc2.35",
+    "driver_version": "580.65.06",
+    "comfyui_commit": "b615af1c",
+    "comfy_runtime_version": "0.3.1",
+    "argv": [
+      "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e/runners/runtime_runner.py",
+      "--workflow",
+      "sd15_text_to_image",
+      "--run-idx",
+      "3",
+      "--out",
+      "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e/results/20260410T125727Z/sd15_text_to_image_runtime_3.json"
+    ],
+    "cwd": "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e",
+    "torch_version": "2.11.0+cu130",
+    "cuda_version": "13.0",
+    "gpu_name": "NVIDIA GeForce RTX 4090",
+    "gpu_memory_total_mb": 24080
+  }
+}

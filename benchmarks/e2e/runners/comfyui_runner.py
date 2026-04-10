@@ -216,23 +216,45 @@ def _install_instrumentation(
                 return "unknown"
         return "unknown"
 
-    def timed(*args: Any, **kwargs: Any):
-        """Wrap execution.execute to capture wall-clock node timing.
+    import inspect
 
-        Calls the original function, then records elapsed time under the
-        recovered class_type. CUDA is synchronized after the call so the
-        measurement includes GPU kernel completion.
-        """
-        class_type = _recover_class_type(args, kwargs)
-        t0 = time.perf_counter_ns()
-        try:
-            result = original(*args, **kwargs)
-        finally:
-            _try_cuda_sync()
-            elapsed = time.perf_counter_ns() - t0
-            node_rec.record(class_type, elapsed)
-            stage_rec.record(class_type, elapsed)
-        return result
+    original_is_async = inspect.iscoroutinefunction(original)
+
+    if original_is_async:
+        # ComfyUI 0.18+ made ``execution.execute`` an async coroutine that is
+        # awaited from ``execute_async``. The wrapper therefore must also be
+        # async — a sync wrapper would return the coroutine object to the
+        # caller without awaiting it, and our timing would only measure
+        # coroutine creation (microseconds), not the actual node execution.
+        async def timed(*args: Any, **kwargs: Any):
+            """Async wrapper around execution.execute.
+
+            Awaits the original coroutine, synchronizes CUDA, and records
+            elapsed wall-clock time under the recovered class_type.
+            """
+            class_type = _recover_class_type(args, kwargs)
+            t0 = time.perf_counter_ns()
+            try:
+                result = await original(*args, **kwargs)
+            finally:
+                _try_cuda_sync()
+                elapsed = time.perf_counter_ns() - t0
+                node_rec.record(class_type, elapsed)
+                stage_rec.record(class_type, elapsed)
+            return result
+    else:
+        def timed(*args: Any, **kwargs: Any):
+            """Sync wrapper around execution.execute (used by the stub test)."""
+            class_type = _recover_class_type(args, kwargs)
+            t0 = time.perf_counter_ns()
+            try:
+                result = original(*args, **kwargs)
+            finally:
+                _try_cuda_sync()
+                elapsed = time.perf_counter_ns() - t0
+                node_rec.record(class_type, elapsed)
+                stage_rec.record(class_type, elapsed)
+            return result
 
     execution.execute = timed  # type: ignore[assignment]
     return node_rec, stage_rec

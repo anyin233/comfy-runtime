@@ -1,0 +1,78 @@
+{
+  "workflow": "esrgan_upscale",
+  "side": "runtime",
+  "run_idx": 0,
+  "status": "ok",
+  "error": null,
+  "total_ns": 1621125987,
+  "stages": [
+    {
+      "name": "load_input",
+      "elapsed_ns": 28851401,
+      "node_count": 1
+    },
+    {
+      "name": "model_load",
+      "elapsed_ns": 260370386,
+      "node_count": 1
+    },
+    {
+      "name": "upscale",
+      "elapsed_ns": 612374749,
+      "node_count": 1
+    },
+    {
+      "name": "save",
+      "elapsed_ns": 484153584,
+      "node_count": 1
+    }
+  ],
+  "nodes": [
+    {
+      "class_type": "LoadImage",
+      "call_index": 0,
+      "elapsed_ns": 28851401
+    },
+    {
+      "class_type": "UpscaleModelLoader",
+      "call_index": 0,
+      "elapsed_ns": 260370386
+    },
+    {
+      "class_type": "ImageUpscaleWithModel",
+      "call_index": 0,
+      "elapsed_ns": 612374749
+    },
+    {
+      "class_type": "SaveImage",
+      "call_index": 0,
+      "elapsed_ns": 484153584
+    }
+  ],
+  "gpu_peak_allocated_bytes": 3291584512,
+  "gpu_peak_reserved_bytes": 5507121152,
+  "host_vmhwm_bytes": 1224790016,
+  "env": {
+    "hostname": "jazz1",
+    "timestamp_utc": "2026-04-10T13:01:40.672708Z",
+    "python_version": "3.13.7",
+    "platform": "Linux-5.15.0-174-generic-x86_64-with-glibc2.35",
+    "driver_version": "580.65.06",
+    "comfyui_commit": "b615af1c",
+    "comfy_runtime_version": "0.3.1",
+    "argv": [
+      "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e/runners/runtime_runner.py",
+      "--workflow",
+      "esrgan_upscale",
+      "--run-idx",
+      "0",
+      "--out",
+      "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e/results/20260410T125727Z/esrgan_upscale_runtime_0.json"
+    ],
+    "cwd": "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e",
+    "torch_version": "2.11.0+cu130",
+    "cuda_version": "13.0",
+    "gpu_name": "NVIDIA GeForce RTX 4090",
+    "gpu_memory_total_mb": 24080
+  }
+}
