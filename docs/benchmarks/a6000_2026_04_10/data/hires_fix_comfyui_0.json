@@ -1,0 +1,118 @@
+{
+  "workflow": "hires_fix",
+  "side": "comfyui",
+  "run_idx": 0,
+  "status": "ok",
+  "error": null,
+  "total_ns": 5592478759,
+  "stages": [
+    {
+      "name": "model_load",
+      "elapsed_ns": 921617067,
+      "node_count": 1
+    },
+    {
+      "name": "text_encode",
+      "elapsed_ns": 152914817,
+      "node_count": 2
+    },
+    {
+      "name": "latent_init",
+      "elapsed_ns": 271756,
+      "node_count": 1
+    },
+    {
+      "name": "sample",
+      "elapsed_ns": 3952480838,
+      "node_count": 2
+    },
+    {
+      "name": "upscale_latent",
+      "elapsed_ns": 372376,
+      "node_count": 1
+    },
+    {
+      "name": "decode",
+      "elapsed_ns": 377864726,
+      "node_count": 1
+    },
+    {
+      "name": "save",
+      "elapsed_ns": 184275139,
+      "node_count": 1
+    }
+  ],
+  "nodes": [
+    {
+      "class_type": "CheckpointLoaderSimple",
+      "call_index": 0,
+      "elapsed_ns": 921617067
+    },
+    {
+      "class_type": "EmptyLatentImage",
+      "call_index": 0,
+      "elapsed_ns": 271756
+    },
+    {
+      "class_type": "CLIPTextEncode",
+      "call_index": 0,
+      "elapsed_ns": 132778133
+    },
+    {
+      "class_type": "CLIPTextEncode",
+      "call_index": 1,
+      "elapsed_ns": 20136684
+    },
+    {
+      "class_type": "KSampler",
+      "call_index": 0,
+      "elapsed_ns": 1544864916
+    },
+    {
+      "class_type": "LatentUpscale",
+      "call_index": 0,
+      "elapsed_ns": 372376
+    },
+    {
+      "class_type": "KSampler",
+      "call_index": 1,
+      "elapsed_ns": 2407615922
+    },
+    {
+      "class_type": "VAEDecode",
+      "call_index": 0,
+      "elapsed_ns": 377864726
+    },
+    {
+      "class_type": "SaveImage",
+      "call_index": 0,
+      "elapsed_ns": 184275139
+    }
+  ],
+  "gpu_peak_allocated_bytes": 4491749376,
+  "gpu_peak_reserved_bytes": 5534384128,
+  "host_vmhwm_bytes": 7373774848,
+  "env": {
+    "hostname": "fuji1",
+    "timestamp_utc": "2026-04-10T15:25:38.375809Z",
+    "python_version": "3.13.2",
+    "platform": "Linux-5.15.0-170-generic-x86_64-with-glibc2.35",
+    "driver_version": "590.48.01",
+    "comfyui_commit": "2d861fb1",
+    "comfy_runtime_version": "0.3.1",
+    "argv": [
+      "/chivier-disk/yanweiye/Projects/comfy-runtime/.worktrees/flux2-investigation/benchmarks/e2e/runners/comfyui_runner.py",
+      "--workflow",
+      "hires_fix",
+      "--run-idx",
+      "0",
+      "--out",
+      "/chivier-disk/yanweiye/Projects/comfy-runtime/.worktrees/flux2-investigation/benchmarks/e2e/results/20260410T152119Z/hires_fix_comfyui_0.json"
+    ],
+    "cwd": "/chivier-disk/yanweiye/Projects/comfy-runtime/.worktrees/flux2-investigation",
+    "torch_version": "2.11.0+cu130",
+    "cuda_version": "13.0",
+    "gpu_name": "NVIDIA RTX A6000",
+    "gpu_memory_total_mb": 48541
+  }
+}

@@ -1,0 +1,123 @@
+{
+  "workflow": "inpainting",
+  "side": "runtime",
+  "run_idx": 1,
+  "status": "ok",
+  "error": null,
+  "total_ns": 2855366859,
+  "stages": [
+    {
+      "name": "model_load",
+      "elapsed_ns": 591210632,
+      "node_count": 1
+    },
+    {
+      "name": "load_input",
+      "elapsed_ns": 10316748,
+      "node_count": 1
+    },
+    {
+      "name": "vae_encode",
+      "elapsed_ns": 303928336,
+      "node_count": 1
+    },
+    {
+      "name": "noise_mask",
+      "elapsed_ns": 70033,
+      "node_count": 1
+    },
+    {
+      "name": "text_encode",
+      "elapsed_ns": 146910483,
+      "node_count": 2
+    },
+    {
+      "name": "sample",
+      "elapsed_ns": 1691762624,
+      "node_count": 1
+    },
+    {
+      "name": "decode",
+      "elapsed_ns": 61359772,
+      "node_count": 1
+    },
+    {
+      "name": "save",
+      "elapsed_ns": 44050064,
+      "node_count": 1
+    }
+  ],
+  "nodes": [
+    {
+      "class_type": "CheckpointLoaderSimple",
+      "call_index": 0,
+      "elapsed_ns": 591210632
+    },
+    {
+      "class_type": "LoadImage",
+      "call_index": 0,
+      "elapsed_ns": 10316748
+    },
+    {
+      "class_type": "VAEEncode",
+      "call_index": 0,
+      "elapsed_ns": 303928336
+    },
+    {
+      "class_type": "SetLatentNoiseMask",
+      "call_index": 0,
+      "elapsed_ns": 70033
+    },
+    {
+      "class_type": "CLIPTextEncode",
+      "call_index": 0,
+      "elapsed_ns": 119969256
+    },
+    {
+      "class_type": "CLIPTextEncode",
+      "call_index": 1,
+      "elapsed_ns": 26941227
+    },
+    {
+      "class_type": "KSampler",
+      "call_index": 0,
+      "elapsed_ns": 1691762624
+    },
+    {
+      "class_type": "VAEDecode",
+      "call_index": 0,
+      "elapsed_ns": 61359772
+    },
+    {
+      "class_type": "SaveImage",
+      "call_index": 0,
+      "elapsed_ns": 44050064
+    }
+  ],
+  "gpu_peak_allocated_bytes": 6882411008,
+  "gpu_peak_reserved_bytes": 7088373760,
+  "host_vmhwm_bytes": 7314391040,
+  "env": {
+    "hostname": "fuji1",
+    "timestamp_utc": "2026-04-10T15:23:47.270431Z",
+    "python_version": "3.13.2",
+    "platform": "Linux-5.15.0-170-generic-x86_64-with-glibc2.35",
+    "driver_version": "590.48.01",
+    "comfyui_commit": "2d861fb1",
+    "comfy_runtime_version": "0.3.1",
+    "argv": [
+      "/chivier-disk/yanweiye/Projects/comfy-runtime/.worktrees/flux2-investigation/benchmarks/e2e/runners/runtime_runner.py",
+      "--workflow",
+      "inpainting",
+      "--run-idx",
+      "1",
+      "--out",
+      "/chivier-disk/yanweiye/Projects/comfy-runtime/.worktrees/flux2-investigation/benchmarks/e2e/results/20260410T152119Z/inpainting_runtime_1.json"
+    ],
+    "cwd": "/chivier-disk/yanweiye/Projects/comfy-runtime/.worktrees/flux2-investigation",
+    "torch_version": "2.11.0+cu130",
+    "cuda_version": "13.0",
+    "gpu_name": "NVIDIA RTX A6000",
+    "gpu_memory_total_mb": 48541
+  }
+}

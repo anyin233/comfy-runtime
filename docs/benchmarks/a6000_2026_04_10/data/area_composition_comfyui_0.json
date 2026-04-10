@@ -1,0 +1,138 @@
+{
+  "workflow": "area_composition",
+  "side": "comfyui",
+  "run_idx": 0,
+  "status": "ok",
+  "error": null,
+  "total_ns": 4485024794,
+  "stages": [
+    {
+      "name": "model_load",
+      "elapsed_ns": 739828594,
+      "node_count": 1
+    },
+    {
+      "name": "text_encode",
+      "elapsed_ns": 187292505,
+      "node_count": 4
+    },
+    {
+      "name": "conditioning",
+      "elapsed_ns": 381064,
+      "node_count": 4
+    },
+    {
+      "name": "latent_init",
+      "elapsed_ns": 356026,
+      "node_count": 1
+    },
+    {
+      "name": "sample",
+      "elapsed_ns": 3290922863,
+      "node_count": 1
+    },
+    {
+      "name": "decode",
+      "elapsed_ns": 201088392,
+      "node_count": 1
+    },
+    {
+      "name": "save",
+      "elapsed_ns": 62139054,
+      "node_count": 1
+    }
+  ],
+  "nodes": [
+    {
+      "class_type": "CheckpointLoaderSimple",
+      "call_index": 0,
+      "elapsed_ns": 739828594
+    },
+    {
+      "class_type": "EmptyLatentImage",
+      "call_index": 0,
+      "elapsed_ns": 356026
+    },
+    {
+      "class_type": "CLIPTextEncode",
+      "call_index": 0,
+      "elapsed_ns": 130712366
+    },
+    {
+      "class_type": "CLIPTextEncode",
+      "call_index": 1,
+      "elapsed_ns": 20169128
+    },
+    {
+      "class_type": "ConditioningSetArea",
+      "call_index": 0,
+      "elapsed_ns": 123525
+    },
+    {
+      "class_type": "CLIPTextEncode",
+      "call_index": 2,
+      "elapsed_ns": 17570986
+    },
+    {
+      "class_type": "ConditioningSetArea",
+      "call_index": 1,
+      "elapsed_ns": 93037
+    },
+    {
+      "class_type": "CLIPTextEncode",
+      "call_index": 3,
+      "elapsed_ns": 18840025
+    },
+    {
+      "class_type": "ConditioningCombine",
+      "call_index": 0,
+      "elapsed_ns": 84681
+    },
+    {
+      "class_type": "ConditioningCombine",
+      "call_index": 1,
+      "elapsed_ns": 79821
+    },
+    {
+      "class_type": "KSampler",
+      "call_index": 0,
+      "elapsed_ns": 3290922863
+    },
+    {
+      "class_type": "VAEDecode",
+      "call_index": 0,
+      "elapsed_ns": 201088392
+    },
+    {
+      "class_type": "SaveImage",
+      "call_index": 0,
+      "elapsed_ns": 62139054
+    }
+  ],
+  "gpu_peak_allocated_bytes": 3055036416,
+  "gpu_peak_reserved_bytes": 3487563776,
+  "host_vmhwm_bytes": 7374090240,
+  "env": {
+    "hostname": "fuji1",
+    "timestamp_utc": "2026-04-10T15:27:02.772711Z",
+    "python_version": "3.13.2",
+    "platform": "Linux-5.15.0-170-generic-x86_64-with-glibc2.35",
+    "driver_version": "590.48.01",
+    "comfyui_commit": "2d861fb1",
+    "comfy_runtime_version": "0.3.1",
+    "argv": [
+      "/chivier-disk/yanweiye/Projects/comfy-runtime/.worktrees/flux2-investigation/benchmarks/e2e/runners/comfyui_runner.py",
+      "--workflow",
+      "area_composition",
+      "--run-idx",
+      "0",
+      "--out",
+      "/chivier-disk/yanweiye/Projects/comfy-runtime/.worktrees/flux2-investigation/benchmarks/e2e/results/20260410T152119Z/area_composition_comfyui_0.json"
+    ],
+    "cwd": "/chivier-disk/yanweiye/Projects/comfy-runtime/.worktrees/flux2-investigation",
+    "torch_version": "2.11.0+cu130",
+    "cuda_version": "13.0",
+    "gpu_name": "NVIDIA RTX A6000",
+    "gpu_memory_total_mb": 48541
+  }
+}

@@ -17,7 +17,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
-COMFYUI_PATH = Path("/home/yanweiye/Project/ComfyUI")
+# Upstream ComfyUI clone used for vendored commit detection. The default
+# matches the original dev machine; override via the ``COMFYUI_PATH`` env
+# var on any other host. Matches the pattern used by
+# ``benchmarks/e2e/runners/comfyui_runner.py`` and the profiling scripts.
+COMFYUI_PATH = Path(os.environ.get("COMFYUI_PATH", "/home/yanweiye/Project/ComfyUI"))
 
 
 def _safe_run(cmd: list[str]) -> str:

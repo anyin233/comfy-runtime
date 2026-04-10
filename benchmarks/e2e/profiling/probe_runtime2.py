@@ -1,8 +1,21 @@
-import sys, time
-sys.path.insert(0, "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark")
-import torch
-import comfy_runtime
-comfy_runtime.configure(models_dir="/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/workflows/sd15_text_to_image/models")
+"""probe_runtime2.py"""
+import os
+import sys
+from pathlib import Path
+
+# Repo root: this file is at $REPO/benchmarks/e2e/profiling/, so 3 parents up.
+REPO = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO))
+
+# Upstream ComfyUI clone path (overridable via env var).
+COMFYUI_PATH = os.environ.get("COMFYUI_PATH", "/home/yanweiye/Project/ComfyUI")
+
+# Workflow models root (overridable via env var).
+WORKFLOW_MODELS = Path(os.environ.get("WORKFLOW_MODELS", REPO / "workflows"))
+SD15_MODELS_DIR = str(WORKFLOW_MODELS / "sd15_text_to_image" / "models")
+SD15_CHECKPOINTS_DIR = str(WORKFLOW_MODELS / "sd15_text_to_image" / "models" / "checkpoints")
+
+comfy_runtime.configure(models_dir=SD15_MODELS_DIR)
 
 torch.cuda.reset_peak_memory_stats()
 torch.cuda.synchronize()
@@ -37,3 +50,4 @@ print(f"  load_device: {clip.load_device if hasattr(clip, 'load_device') else 'n
 
 print("--- vae ---")
 storage_summary("vae.first_stage_model", vae.first_stage_model)
+

@@ -1,17 +1,33 @@
-import sys, cProfile, pstats, io
+"""profile_sample.py"""
+import os
+import sys
+from pathlib import Path
+
+# Repo root: this file is at $REPO/benchmarks/e2e/profiling/, so 3 parents up.
+REPO = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO))
+
+# Upstream ComfyUI clone path (overridable via env var).
+COMFYUI_PATH = os.environ.get("COMFYUI_PATH", "/home/yanweiye/Project/ComfyUI")
+
+# Workflow models root (overridable via env var).
+WORKFLOW_MODELS = Path(os.environ.get("WORKFLOW_MODELS", REPO / "workflows"))
+SD15_MODELS_DIR = str(WORKFLOW_MODELS / "sd15_text_to_image" / "models")
+SD15_CHECKPOINTS_DIR = str(WORKFLOW_MODELS / "sd15_text_to_image" / "models" / "checkpoints")
+
 SIDE = sys.argv[1]
 if SIDE == "runtime":
-    sys.path.insert(0, "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark")
+    sys.path.insert(0, str(REPO))
     import torch
     import comfy_runtime
-    comfy_runtime.configure(models_dir="/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/workflows/sd15_text_to_image/models")
+    comfy_runtime.configure(models_dir=SD15_MODELS_DIR)
     EX = comfy_runtime.execute_node
 else:
-    sys.path.insert(0, "/home/yanweiye/Project/ComfyUI")
+    sys.path.insert(0, COMFYUI_PATH)
     import torch
     import nodes
     import folder_paths
-    folder_paths.add_model_folder_path("checkpoints", "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/workflows/sd15_text_to_image/models/checkpoints")
+    folder_paths.add_model_folder_path("checkpoints", SD15_CHECKPOINTS_DIR)
     NCM = nodes.NODE_CLASS_MAPPINGS
     def EX(class_type, **kwargs):
         cls = NCM[class_type]
@@ -40,3 +56,4 @@ s = io.StringIO()
 ps = pstats.Stats(pr, stream=s).sort_stats('cumulative')
 ps.print_stats(30)
 print(s.getvalue())
+

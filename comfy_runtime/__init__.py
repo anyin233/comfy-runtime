@@ -20,3 +20,7 @@ from comfy_runtime.registry import (
     register_nodes,
     unregister_node,
 )
+from comfy_runtime.memory import (
+    free_memory,
+    unload_all_models,
+)

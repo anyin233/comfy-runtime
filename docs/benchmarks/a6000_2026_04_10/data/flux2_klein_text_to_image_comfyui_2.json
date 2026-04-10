@@ -1,0 +1,138 @@
+{
+  "workflow": "flux2_klein_text_to_image",
+  "side": "comfyui",
+  "run_idx": 2,
+  "status": "ok",
+  "error": null,
+  "total_ns": 20063679043,
+  "stages": [
+    {
+      "name": "model_load",
+      "elapsed_ns": 2068121227,
+      "node_count": 3
+    },
+    {
+      "name": "text_encode",
+      "elapsed_ns": 1898612528,
+      "node_count": 2
+    },
+    {
+      "name": "guider",
+      "elapsed_ns": 398867,
+      "node_count": 1
+    },
+    {
+      "name": "sampler_prep",
+      "elapsed_ns": 4179536,
+      "node_count": 4
+    },
+    {
+      "name": "sample",
+      "elapsed_ns": 15554816147,
+      "node_count": 1
+    },
+    {
+      "name": "decode",
+      "elapsed_ns": 344549870,
+      "node_count": 1
+    },
+    {
+      "name": "save",
+      "elapsed_ns": 189072023,
+      "node_count": 1
+    }
+  ],
+  "nodes": [
+    {
+      "class_type": "VAELoader",
+      "call_index": 0,
+      "elapsed_ns": 141144810
+    },
+    {
+      "class_type": "EmptyFlux2LatentImage",
+      "call_index": 0,
+      "elapsed_ns": 3237296
+    },
+    {
+      "class_type": "Flux2Scheduler",
+      "call_index": 0,
+      "elapsed_ns": 568570
+    },
+    {
+      "class_type": "KSamplerSelect",
+      "call_index": 0,
+      "elapsed_ns": 183078
+    },
+    {
+      "class_type": "CLIPLoader",
+      "call_index": 0,
+      "elapsed_ns": 1125588107
+    },
+    {
+      "class_type": "CLIPTextEncode",
+      "call_index": 0,
+      "elapsed_ns": 1626322784
+    },
+    {
+      "class_type": "CLIPTextEncode",
+      "call_index": 1,
+      "elapsed_ns": 272289744
+    },
+    {
+      "class_type": "UNETLoader",
+      "call_index": 0,
+      "elapsed_ns": 801388310
+    },
+    {
+      "class_type": "CFGGuider",
+      "call_index": 0,
+      "elapsed_ns": 398867
+    },
+    {
+      "class_type": "RandomNoise",
+      "call_index": 0,
+      "elapsed_ns": 190592
+    },
+    {
+      "class_type": "SamplerCustomAdvanced",
+      "call_index": 0,
+      "elapsed_ns": 15554816147
+    },
+    {
+      "class_type": "VAEDecode",
+      "call_index": 0,
+      "elapsed_ns": 344549870
+    },
+    {
+      "class_type": "SaveImage",
+      "call_index": 0,
+      "elapsed_ns": 189072023
+    }
+  ],
+  "gpu_peak_allocated_bytes": 18365313536,
+  "gpu_peak_reserved_bytes": 19369295872,
+  "host_vmhwm_bytes": 17289363456,
+  "env": {
+    "hostname": "fuji1",
+    "timestamp_utc": "2026-04-10T15:31:35.771766Z",
+    "python_version": "3.13.2",
+    "platform": "Linux-5.15.0-170-generic-x86_64-with-glibc2.35",
+    "driver_version": "590.48.01",
+    "comfyui_commit": "2d861fb1",
+    "comfy_runtime_version": "0.3.1",
+    "argv": [
+      "/chivier-disk/yanweiye/Projects/comfy-runtime/.worktrees/flux2-investigation/benchmarks/e2e/runners/comfyui_runner.py",
+      "--workflow",
+      "flux2_klein_text_to_image",
+      "--run-idx",
+      "2",
+      "--out",
+      "/chivier-disk/yanweiye/Projects/comfy-runtime/.worktrees/flux2-investigation/benchmarks/e2e/results/20260410T152119Z/flux2_klein_text_to_image_comfyui_2.json"
+    ],
+    "cwd": "/chivier-disk/yanweiye/Projects/comfy-runtime/.worktrees/flux2-investigation",
+    "torch_version": "2.11.0+cu130",
+    "cuda_version": "13.0",
+    "gpu_name": "NVIDIA RTX A6000",
+    "gpu_memory_total_mb": 48541
+  }
+}

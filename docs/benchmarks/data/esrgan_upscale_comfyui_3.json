@@ -4,26 +4,26 @@
   "run_idx": 3,
   "status": "ok",
   "error": null,
-  "total_ns": 1467248524,
+  "total_ns": 1429632658,
   "stages": [
     {
       "name": "load_input",
-      "elapsed_ns": 10475511,
+      "elapsed_ns": 9636416,
       "node_count": 1
     },
     {
       "name": "model_load",
-      "elapsed_ns": 316034007,
+      "elapsed_ns": 310104791,
       "node_count": 1
     },
     {
       "name": "upscale",
-      "elapsed_ns": 618480971,
+      "elapsed_ns": 610701221,
       "node_count": 1
     },
     {
       "name": "save",
-      "elapsed_ns": 520742449,
+      "elapsed_ns": 497769184,
       "node_count": 1
     }
   ],
@@ -31,45 +31,45 @@
     {
       "class_type": "LoadImage",
       "call_index": 0,
-      "elapsed_ns": 10475511
+      "elapsed_ns": 9636416
     },
     {
       "class_type": "UpscaleModelLoader",
       "call_index": 0,
-      "elapsed_ns": 316034007
+      "elapsed_ns": 310104791
     },
     {
       "class_type": "ImageUpscaleWithModel",
       "call_index": 0,
-      "elapsed_ns": 618480971
+      "elapsed_ns": 610701221
     },
     {
       "class_type": "SaveImage",
       "call_index": 0,
-      "elapsed_ns": 520742449
+      "elapsed_ns": 497769184
     }
   ],
   "gpu_peak_allocated_bytes": 3291584512,
   "gpu_peak_reserved_bytes": 5507121152,
-  "host_vmhwm_bytes": 1374658560,
+  "host_vmhwm_bytes": 1375154176,
   "env": {
     "hostname": "jazz1",
-    "timestamp_utc": "2026-04-10T13:25:55.949922Z",
+    "timestamp_utc": "2026-04-10T14:05:00.615889Z",
     "python_version": "3.13.7",
     "platform": "Linux-5.15.0-174-generic-x86_64-with-glibc2.35",
     "driver_version": "580.65.06",
     "comfyui_commit": "b615af1c",
     "comfy_runtime_version": "0.3.1",
     "argv": [
-      "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e/runners/comfyui_runner.py",
+      "/home/yanweiye/Project/comfy_runtime/.worktrees/flux2-investigation/benchmarks/e2e/runners/comfyui_runner.py",
       "--workflow",
       "esrgan_upscale",
       "--run-idx",
       "3",
       "--out",
-      "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e/results/20260410T132106Z/esrgan_upscale_comfyui_3.json"
+      "/home/yanweiye/Project/comfy_runtime/.worktrees/flux2-investigation/benchmarks/e2e/results/20260410T140008Z/esrgan_upscale_comfyui_3.json"
     ],
-    "cwd": "/home/yanweiye/Project/comfy_runtime/.worktrees/e2e-benchmark/benchmarks/e2e",
+    "cwd": "/home/yanweiye/Project/comfy_runtime/.worktrees/flux2-investigation/benchmarks/e2e",
     "torch_version": "2.11.0+cu130",
     "cuda_version": "13.0",
     "gpu_name": "NVIDIA GeForce RTX 4090",

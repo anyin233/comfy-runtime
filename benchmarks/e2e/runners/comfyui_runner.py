@@ -3,14 +3,18 @@
 CLI: ``python comfyui_runner.py --workflow NAME --run-idx N --out PATH``
 
 Expects to be launched from ``benchmarks/e2e/comfyui-env/.venv``. On import,
-it prepends ``/home/yanweiye/Project/ComfyUI`` to ``sys.path`` so the upstream
-modules can be imported.
+it prepends the upstream ComfyUI clone's path to ``sys.path`` so the
+upstream modules can be imported. The path defaults to
+``/home/yanweiye/Project/ComfyUI`` (original dev machine) and can be
+overridden via the ``COMFYUI_PATH`` env var on any other host, matching
+the pattern used by the profiling scripts and ``_harness/env.py``.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import sys
 import time
@@ -20,7 +24,7 @@ from typing import Any
 
 import yaml
 
-COMFYUI_PATH = "/home/yanweiye/Project/ComfyUI"
+COMFYUI_PATH = os.environ.get("COMFYUI_PATH", "/home/yanweiye/Project/ComfyUI")
 if COMFYUI_PATH not in sys.path:
     sys.path.insert(0, COMFYUI_PATH)
 

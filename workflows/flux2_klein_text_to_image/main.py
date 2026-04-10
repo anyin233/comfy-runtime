@@ -131,6 +131,22 @@ def main():
         text="",
     )[0]
 
+    # Evict the text encoder (Qwen 3 4B, ~8 GB) before sampling loads the
+    # diffusion model weights. Without this, the 24 GB VRAM ceiling forces
+    # VAE decode into tiled fallback mode and the whole workflow pays a
+    # ~700 ms penalty. See docs/benchmarks/profiling_findings.md.
+    #
+    # Order matters: drop the user-level ``clip`` ref BEFORE calling
+    # unload_all_models(). comfy_runtime.free_memory() ends with
+    # soft_empty_cache(); that call can only return blocks to the driver
+    # if no strong refs still pin them. Doing ``del clip`` after the
+    # unload would leave the cached pool looking full to the VAE decode
+    # that follows, re-triggering the tiled-decode fallback it's meant
+    # to avoid.
+    print("=== Releasing text encoder ===")
+    del clip
+    comfy_runtime.unload_all_models()
+
     # Step 8: Create CFG Guider
     print(f"\n=== Creating CFG Guider (cfg={CFG}) ===")
     guider = comfy_runtime.execute_node(
@@ -184,6 +200,22 @@ def main():
         latent_image=latent,
     )
     print("Sampling complete.")
+
+    # Evict the diffusion model (Flux.2 Klein 4B, ~8 GB) before VAE decode.
+    # Without this, VAE decode hits the 24 GB VRAM ceiling and falls back
+    # to tiled decoding, which is ~4x slower.
+    #
+    # ``guider`` holds a strong ref to ``model`` via CFGGuider.model, so
+    # both must be dropped before the unload call. ``positive`` and
+    # ``negative`` are conditioning tensors, not model refs, but we drop
+    # them here for symmetry — they're small but reachable via ``guider``
+    # so cleanup is cheaper if we release the whole chain at once.
+    print("=== Releasing diffusion model ===")
+    del guider
+    del model
+    del positive
+    del negative
+    comfy_runtime.unload_all_models()
 
     # Step 14: Decode latent to image
     print("\n=== Decoding VAE ===")
