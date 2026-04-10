@@ -1,0 +1,36 @@
+# {{ workflow }}
+
+[← Back to summary](../README.md)
+
+## Stage breakdown (mean +/- stddev, ms)
+
+| Stage | comfy_runtime min | mean | median | stddev | ComfyUI min | mean | median | stddev | Δmean |
+|---|---|---|---|---|---|---|---|---|---|
+{% for stage in stage_rows -%}
+| {{ stage.name }} | {{ stage.runtime_min_ms }} | {{ stage.runtime_mean_ms }} | {{ stage.runtime_median_ms }} | {{ stage.runtime_stddev_ms }} | {{ stage.comfyui_min_ms }} | {{ stage.comfyui_mean_ms }} | {{ stage.comfyui_median_ms }} | {{ stage.comfyui_stddev_ms }} | {{ stage.delta_mean_pct }} |
+{% endfor %}
+| **total** | {{ total.runtime_min_ms }} | {{ total.runtime_mean_ms }} | {{ total.runtime_median_ms }} | {{ total.runtime_stddev_ms }} | {{ total.comfyui_min_ms }} | {{ total.comfyui_mean_ms }} | {{ total.comfyui_median_ms }} | {{ total.comfyui_stddev_ms }} | **{{ total.delta_mean_pct }}** |
+
+![Stage breakdown](../figures/stage_breakdown_{{ workflow }}.png)
+
+## Memory
+
+| Metric | comfy_runtime (MB) | ComfyUI (MB) | Δ |
+|---|---|---|---|
+| GPU max allocated | {{ mem.runtime_alloc_mb }} | {{ mem.comfyui_alloc_mb }} | {{ mem.delta_alloc_pct }} |
+| GPU max reserved  | {{ mem.runtime_reserved_mb }} | {{ mem.comfyui_reserved_mb }} | {{ mem.delta_reserved_pct }} |
+| Host VmHWM        | {{ mem.runtime_vmhwm_mb }} | {{ mem.comfyui_vmhwm_mb }} | {{ mem.delta_vmhwm_pct }} |
+
+## Per-node breakdown (mean, ms)
+
+| Node | Call index | comfy_runtime | ComfyUI | Δ |
+|---|---|---|---|---|
+{% for node in node_rows -%}
+| {{ node.class_type }} | {{ node.call_index }} | {{ node.runtime_mean_ms }} | {{ node.comfyui_mean_ms }} | {{ node.delta_pct }} |
+{% endfor %}
+
+## Raw data
+
+{% for f in raw_data_files -%}
+- [{{ f }}](../data/{{ f }})
+{% endfor %}

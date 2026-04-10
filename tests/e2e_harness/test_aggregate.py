@@ -95,3 +95,46 @@ def test_compute_stats_includes_stages_and_nodes(tmp_path):
     assert "stages" in stats
     assert "nodes" in stats
     assert "total" in stats["stages"]
+
+
+# --- Rendering tests ---
+
+from benchmarks.e2e.aggregate import render_report
+
+
+def test_render_report_writes_readme_and_workflow_pages(tmp_path):
+    runs_dir = _write_fixtures(tmp_path)
+    docs_root = tmp_path / "docs" / "benchmarks"
+
+    render_report(
+        runs_dir=runs_dir,
+        docs_root=docs_root,
+        copy_raw_data=False,
+        render_figures=False,
+    )
+
+    readme = docs_root / "README.md"
+    assert readme.exists()
+    content = readme.read_text()
+    assert "sd15" in content
+    assert "flux" in content
+    assert "runtime" in content.lower() and "comfyui" in content.lower()
+
+    wf_page = docs_root / "workflows" / "sd15.md"
+    assert wf_page.exists()
+    wf_content = wf_page.read_text()
+    assert "stage" in wf_content.lower()
+
+
+def test_render_report_copies_raw_data(tmp_path):
+    runs_dir = _write_fixtures(tmp_path)
+    docs_root = tmp_path / "docs" / "benchmarks"
+    render_report(
+        runs_dir=runs_dir,
+        docs_root=docs_root,
+        copy_raw_data=True,
+        render_figures=False,
+    )
+    data_dir = docs_root / "data"
+    assert data_dir.exists()
+    assert len(list(data_dir.glob("*.json"))) == 2 * 2 * 4
