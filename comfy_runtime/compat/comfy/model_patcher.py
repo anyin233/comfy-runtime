@@ -10,8 +10,54 @@ import logging
 from typing import Any, Dict, Optional, Set
 
 import torch
+import torch.nn as nn
+
+# Re-export PatcherInjection for ComfyUI custom nodes (e.g.
+# AnimateDiff-Evolved) that import it from ``comfy.model_patcher``
+# instead of ``comfy.patcher_extension``.
+from comfy_runtime.compat.comfy.patcher_extension import PatcherInjection  # noqa: F401
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_delta(patch_data) -> Optional[torch.Tensor]:
+    """Normalize a single patch payload into a delta tensor.
+
+    ComfyUI's patch payload format is heterogeneous.  Phase 1 handles:
+
+    * A raw ``torch.Tensor`` → treated as a direct delta
+    * A 1-tuple ``(delta_tensor,)`` → equivalent to the raw form
+
+    Phase 2 will also handle LoRA factored tuples such as
+    ``(up_tensor, down_tensor, alpha, mid_tensor, strength_patch_scale)``
+    via a dedicated ``_lora_peft`` helper.  Until then any multi-element
+    tuple returns ``None`` and the patch is skipped.
+    """
+    if isinstance(patch_data, torch.Tensor):
+        return patch_data
+    if isinstance(patch_data, tuple):
+        if len(patch_data) == 1 and isinstance(patch_data[0], torch.Tensor):
+            return patch_data[0]
+        # Phase 2: LoRA factored form.  Signal "skip" for now.
+        return None
+    return None
+
+
+def _resolve_weight_slot(model, key: str):
+    """Return ``(parent_module, attr_name)`` for a dotted state-dict key.
+
+    Returns ``(None, None)`` if any segment is missing.
+    """
+    parts = key.split(".")
+    obj = model
+    for part in parts[:-1]:
+        if not hasattr(obj, part):
+            return None, None
+        obj = getattr(obj, part)
+    attr = parts[-1]
+    if not hasattr(obj, attr):
+        return None, None
+    return obj, attr
 
 
 # ---------------------------------------------------------------------------
@@ -353,60 +399,237 @@ class ModelPatcher:
     def patch_model(self, device_to=None, patch_weights=True):
         """Apply all registered patches to the model weights.
 
+        Each patch entry is a triple
+        ``(strength_patch, patch_data, strength_model)`` produced by
+        :meth:`add_patches`.  For every key the update is::
+
+            new_weight = original * strength_model + delta * strength_patch
+
+        Multiple patches on the same key accumulate in registration order,
+        where each subsequent patch starts from the already-accumulated
+        intermediate (matching ComfyUI's semantics of stacking LoRAs).
+
+        Backups of the original tensors are stored in ``self.backup`` so
+        :meth:`unpatch_model` can restore the model bit-for-bit.
+
         Args:
-            device_to: Optional device to move the model to.
-            patch_weights: Whether to actually apply weight patches.
+            device_to: Optional device to move the model to *after* patching.
+            patch_weights: When ``False``, skip weight modification and only
+                do the device move (used by partial loaders in Phase 3).
 
         Returns:
-            The patched model.
+            The underlying model (for chaining).
         """
-        # TODO(Phase3): Implement actual weight patching logic.
-        if (
-            device_to is not None
-            and self.model is not None
-            and hasattr(self.model, "to")
-        ):
+        if self.model is None:
+            self.is_patched = True
+            return self.model
+
+        if patch_weights and self.patches:
+            with torch.no_grad():
+                for key, patch_list in self.patches.items():
+                    parent, attr_name = _resolve_weight_slot(self.model, key)
+                    if parent is None:
+                        continue
+
+                    original = getattr(parent, attr_name)
+                    if not isinstance(original, torch.Tensor):
+                        continue
+
+                    # Backup once so multiple patch/unpatch cycles are
+                    # idempotent across repeated add_patches calls.
+                    if key not in self.backup:
+                        self.backup[key] = original.detach().clone()
+
+                    new_weight = original.clone()
+                    for strength_patch, patch_data, strength_model in patch_list:
+                        delta = _extract_delta(patch_data)
+                        if delta is None:
+                            continue
+                        delta_cast = delta.to(
+                            device=new_weight.device, dtype=new_weight.dtype
+                        )
+                        new_weight = (
+                            new_weight * float(strength_model)
+                            + delta_cast * float(strength_patch)
+                        )
+
+                    if (
+                        isinstance(parent, nn.Module)
+                        and attr_name in parent._parameters
+                    ):
+                        parent._parameters[attr_name].data.copy_(new_weight)
+                    else:
+                        setattr(parent, attr_name, new_weight)
+
+        if device_to is not None and hasattr(self.model, "to"):
             self.model.to(device_to)
             self.current_device = device_to
         self.is_patched = True
         return self.model
 
     def unpatch_model(self, device_to=None, unpatch_weights=True):
-        """Remove all patches and optionally move model to a device.
+        """Restore original weights from :attr:`backup` and move device.
+
+        After :meth:`patch_model` has stored backups in ``self.backup``,
+        this method copies each original tensor back in-place so further
+        sampling runs see an unmodified model.  Backups are cleared after
+        restoration so the next patch_model pass starts fresh.
 
         Args:
-            device_to: Optional device to move to after unpatching.
-            unpatch_weights: Whether to restore original weights.
+            device_to: Optional device to move the model to after restoration.
+            unpatch_weights: When ``False``, skip the weight restore and only
+                do the device move.
         """
-        # TODO(Phase3): Implement actual weight restoration.
-        if (
-            device_to is not None
-            and self.model is not None
-            and hasattr(self.model, "to")
-        ):
+        if unpatch_weights and self.backup and self.model is not None:
+            with torch.no_grad():
+                for key, original in self.backup.items():
+                    parent, attr_name = _resolve_weight_slot(self.model, key)
+                    if parent is None:
+                        continue
+                    if (
+                        isinstance(parent, nn.Module)
+                        and attr_name in parent._parameters
+                    ):
+                        parent._parameters[attr_name].data.copy_(original)
+                    else:
+                        setattr(parent, attr_name, original)
+            self.backup.clear()
+
+        if device_to is not None and hasattr(self.model, "to"):
             self.model.to(device_to)
             self.current_device = device_to
         self.is_patched = False
 
+    # ------------------------------------------------------------------
+    # Partial loading / unloading — the lowvram primitive.
+    #
+    # ComfyUI's lowvram strategy is to fit as much of the model onto the
+    # compute device as will actually fit, and leave the rest on the
+    # offload device.  These three methods implement that primitive in
+    # an MIT-clean way:
+    #
+    #   * partially_load(device, extra_memory)
+    #       Iterate parameters biggest-first.  Each param that fits in
+    #       the remaining budget gets moved to ``device``.  The rest
+    #       stay where they are.
+    #
+    #   * partially_unload(device, extra_memory)
+    #       Iterate parameters smallest-first.  Move each one from the
+    #       load device to ``device`` until at least ``extra_memory``
+    #       bytes have been freed.
+    #
+    #   * current_loaded_size()
+    #       Total bytes of parameters currently resident on
+    #       ``self.load_device``.  Used by load_models_gpu to decide
+    #       whether a lowvram transition is needed.
+    # ------------------------------------------------------------------
+
+    def _iter_params_biggest_first(self):
+        params = [
+            (name, p)
+            for name, p in self.model.named_parameters(recurse=True)
+        ]
+        params.sort(key=lambda kv: kv[1].nelement() * kv[1].element_size(),
+                    reverse=True)
+        return params
+
+    def _iter_params_smallest_first(self):
+        params = [
+            (name, p)
+            for name, p in self.model.named_parameters(recurse=True)
+        ]
+        params.sort(key=lambda kv: kv[1].nelement() * kv[1].element_size())
+        return params
+
+    def _param_bytes(self, p: torch.Tensor) -> int:
+        return p.nelement() * p.element_size()
+
+    def current_loaded_size(self) -> int:
+        """Bytes of parameters currently resident on :attr:`load_device`.
+
+        Buffers are excluded — lowvram budgeting tracks trainable /
+        patched state only.  ComfyUI's lowvram tier works identically.
+        """
+        if self.model is None:
+            return 0
+        load_type = self.load_device.type if hasattr(self.load_device, "type") else None
+        if load_type is None:
+            return 0
+        total = 0
+        for _, p in self.model.named_parameters(recurse=True):
+            if p.device.type == load_type:
+                total += self._param_bytes(p)
+        return total
+
     def partially_load(self, device, extra_memory=0):
-        """Partially load model weights onto device.
+        """Move as much of the model to ``device`` as fits in ``extra_memory``.
+
+        Implements ComfyUI's lowvram semantics: parameters are moved
+        biggest-first so the most performance-critical layers land on
+        the compute device before anything small gets a chance at the
+        budget.  Parameters already on ``device`` are counted toward the
+        "already resident" total but not double-moved.
+
+        When ``extra_memory`` is larger than the full model, this is
+        equivalent to ``self.model.to(device)`` but cheaper: we only
+        call ``.data.to(...)`` per parameter rather than re-instantiating
+        them.  When ``extra_memory == 0`` this is a no-op.
 
         Args:
-            device: Target device.
-            extra_memory: Extra memory budget in bytes.
+            device: Target compute device (the same as ``load_device``
+                most of the time).
+            extra_memory: Byte budget.  Parameters that don't fit are
+                left where they currently sit (typically ``offload_device``).
         """
-        # TODO(Phase3): Implement partial loading.
-        pass
+        if self.model is None or extra_memory <= 0:
+            return
+
+        device = torch.device(device) if not isinstance(device, torch.device) else device
+        remaining = int(extra_memory)
+
+        with torch.no_grad():
+            for _, p in self._iter_params_biggest_first():
+                if p.device.type == device.type:
+                    continue  # already resident
+                size = self._param_bytes(p)
+                if size > remaining:
+                    continue
+                p.data = p.data.to(device, non_blocking=True)
+                remaining -= size
+
+        self.current_device = device
 
     def partially_unload(self, device, extra_memory=0):
-        """Partially unload model weights from device.
+        """Evict parameters from :attr:`load_device` back to ``device``.
+
+        Smallest-first eviction order — this keeps the most "useful"
+        big layers resident as long as possible (matching ComfyUI's
+        lowvram behavior under memory pressure).
 
         Args:
-            device: Offload device.
-            extra_memory: Memory to free in bytes.
+            device: Offload destination device (usually CPU).
+            extra_memory: Minimum bytes to free.  Eviction stops as
+                soon as cumulative freed bytes ≥ this value.
         """
-        # TODO(Phase3): Implement partial unloading.
-        pass
+        if self.model is None or extra_memory <= 0:
+            return
+
+        device = torch.device(device) if not isinstance(device, torch.device) else device
+        load_type = self.load_device.type
+        freed = 0
+
+        with torch.no_grad():
+            for _, p in self._iter_params_smallest_first():
+                if p.device.type != load_type:
+                    continue  # not resident, nothing to evict
+                size = self._param_bytes(p)
+                p.data = p.data.to(device, non_blocking=True)
+                freed += size
+                if freed >= extra_memory:
+                    break
+
+        if freed > 0:
+            self.current_device = device
 
 
 # ---------------------------------------------------------------------------

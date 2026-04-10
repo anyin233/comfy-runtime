@@ -167,6 +167,12 @@ class _DisableWeightInit:
 
     All classes are drop-in replacements for their torch.nn counterparts,
     differing only in that reset_parameters() is a no-op.
+
+    Custom nodes (e.g. ComfyUI-Advanced-ControlNet) sometimes
+    instantiate this namespace directly with positional/keyword args
+    expecting an opaque "ops registry" object — we accept *args /
+    **kwargs and ignore them so those import-time constructions don't
+    crash.
     """
 
     Linear = _Linear
@@ -179,6 +185,9 @@ class _DisableWeightInit:
     Embedding = _Embedding
     GroupNorm = _GroupNorm
     LayerNorm = _LayerNorm
+
+    def __init__(self, *args, **kwargs):
+        pass
 
 
 disable_weight_init = _DisableWeightInit()
@@ -271,6 +280,10 @@ class _ManualCast:
 
         from comfy.ops import manual_cast
         layer = manual_cast.Linear(768, 768)
+
+    Custom nodes (ComfyUI-Advanced-ControlNet) sometimes instantiate
+    this directly with positional/keyword args expecting an opaque
+    "ops registry" — accept *args / **kwargs and ignore them.
     """
 
     Linear = _CastLinear
@@ -283,6 +296,9 @@ class _ManualCast:
     Embedding = _Embedding
     GroupNorm = _GroupNorm
     LayerNorm = _LayerNorm
+
+    def __init__(self, *args, **kwargs):
+        pass
 
 
 manual_cast = _ManualCast()

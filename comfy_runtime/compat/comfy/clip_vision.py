@@ -63,3 +63,22 @@ class ClipVisionModel:
             Output object with encoded representations.
         """
         raise NotImplementedError("ClipVisionModel.encode_image is a stub")
+
+
+def load(ckpt_path: str):
+    """Load a CLIP vision model from a single-file checkpoint.
+
+    Import-compat stub: custom nodes (e.g. IPAdapter_plus) reference
+    ``comfy.clip_vision.load`` at import time, so we need this symbol
+    to exist.  Routes through transformers ``CLIPVisionModel`` when
+    available, else raises a clear error pointing at the ControlNet
+    loader pattern as a template for Phase 5 work.
+    """
+    try:
+        from transformers import CLIPVisionModel
+
+        return CLIPVisionModel.from_pretrained(ckpt_path)
+    except Exception as e:
+        raise NotImplementedError(
+            f"comfy.clip_vision.load for {ckpt_path!r} not implemented: {e}"
+        )

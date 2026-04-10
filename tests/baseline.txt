@@ -1,0 +1,17 @@
+Phase 0 baseline — before MIT rewrite begins.
+
+Date:  2026-04-10
+Branch: feature/slim-vendor
+_vendor/ present: NO (gitignored; worktree clean)
+Unit tests passing: 42
+  - test_bench_harness.py
+  - test_configure_idempotent.py
+  - test_dependencies.py        (Task 0.1, new)
+  - test_executor_cache.py
+  - test_image_io_roundtrip.py
+  - test_lanczos_fast_path.py
+  - test_registry_cache.py
+  - test_shim.py
+
+Run time:  ~2.7 s
+Command:   python -m pytest tests/unit/ -v

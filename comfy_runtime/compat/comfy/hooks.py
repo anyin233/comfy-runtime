@@ -154,11 +154,79 @@ class HookKeyframeGroup:
 # ---------------------------------------------------------------------------
 
 
+class Hook:
+    """Base hook — stacks a single weight-modification operation onto a
+    :class:`ModelPatcher`.
+
+    Subclasses override :meth:`patch_model` to register their specific
+    contribution (LoRA deltas, custom weight patches, ...).  The base
+    class itself is a no-op so tests can instantiate it for mocking.
+
+    Hooks never materialize weights directly — they only register their
+    deltas on the patcher's ``.patches`` dict.  The parent
+    :class:`HookGroup` triggers the actual ``patcher.patch_model()``
+    call once after all hooks have been applied, so stacked hooks
+    compose through a single backup/restore cycle.
+    """
+
+    def __init__(self, strength: float = 1.0):
+        self.strength = float(strength)
+
+    def patch_model(self, patcher) -> None:
+        """Register this hook's contribution on the patcher (no-op in base)."""
+        return None
+
+    def unpatch_model(self, patcher) -> None:
+        """Remove this hook's contribution from the patcher (no-op in base)."""
+        return None
+
+    def clone(self) -> "Hook":
+        """Return a deep-enough copy that mutating the clone's state
+        does not affect the original."""
+        import copy
+        return copy.copy(self)
+
+
+class LoRAHook(Hook):
+    """Applies a ComfyUI/kohya-format LoRA state dict as a single hook.
+
+    Constructor accepts the raw LoRA state dict and a strength; on
+    :meth:`patch_model` the hook calls
+    :func:`comfy_runtime.compat.comfy._lora_peft.apply_lora_to_patcher`
+    which translates the ``.lora_up / .lora_down / .alpha`` triples
+    into raw delta patches and registers them on the patcher.
+
+    The parent :class:`HookGroup.patch_hooks` triggers the single
+    ``patcher.patch_model()`` call after all hooks in the group have
+    added their patches, so stacked LoRAs compose correctly without
+    per-hook backup cycles.
+    """
+
+    def __init__(self, lora_sd: Dict[str, Any], strength: float = 1.0):
+        super().__init__(strength=strength)
+        self.lora_sd = lora_sd
+
+    def patch_model(self, patcher) -> None:
+        from comfy_runtime.compat.comfy._lora_peft import apply_lora_to_patcher
+
+        apply_lora_to_patcher(patcher, self.lora_sd, strength=self.strength)
+
+    def unpatch_model(self, patcher) -> None:
+        # LoRAHook unpatch is handled at the HookGroup level by
+        # patcher.unpatch_model(), which restores from the backup
+        # captured during patch_model.  Individual-hook surgical
+        # unpatching isn't needed for the stacked-weights path.
+        return None
+
+
 class HookGroup:
-    """Group of hooks to be applied together during sampling.
+    """Group of hooks applied together on a :class:`ModelPatcher`.
 
     Attributes:
-        hooks: List of hook objects.
+        hooks: Ordered list of :class:`Hook` instances.  The apply
+            order matches the list order; unpatch restores from the
+            single backup the patcher captured during
+            :meth:`patch_model`.
     """
 
     def __init__(self):
@@ -180,20 +248,57 @@ class HookGroup:
     def clone(self) -> "HookGroup":
         """Create a copy of this group.
 
+        Each contained hook is shallow-cloned via :meth:`Hook.clone`
+        so mutating the new group's hooks (e.g. changing a hook's
+        strength) doesn't affect the original.
+
         Returns:
-            New HookGroup with the same hooks.
+            New HookGroup with independent hook objects.
         """
         group = HookGroup()
-        group.hooks = list(self.hooks)
+        group.hooks = [
+            h.clone() if hasattr(h, "clone") else h
+            for h in self.hooks
+        ]
         return group
 
     def is_empty(self) -> bool:
-        """Check if the group has no hooks.
-
-        Returns:
-            True if empty.
-        """
+        """Check if the group has no hooks."""
         return len(self.hooks) == 0
+
+    def patch_hooks(self, patcher) -> None:
+        """Apply every hook in order and materialize the stacked delta.
+
+        Each hook adds its contribution to ``patcher.patches`` via
+        :meth:`Hook.patch_model`.  After every hook has registered,
+        we call ``patcher.patch_model()`` exactly once so the
+        accumulated patches materialize in a single backup/restore
+        cycle.  Stacked LoRAs compose correctly because ``add_patches``
+        appends rather than replaces, and the patcher's weight-delta
+        accumulator sums them in registration order.
+        """
+        if self.is_empty():
+            return
+        for hook in self.hooks:
+            if hasattr(hook, "patch_model"):
+                hook.patch_model(patcher)
+        if hasattr(patcher, "patch_model"):
+            patcher.patch_model()
+
+    def unpatch_hooks(self, patcher) -> None:
+        """Restore the patcher to its pre-``patch_hooks`` state.
+
+        Delegates to ``patcher.unpatch_model()`` which uses the backup
+        captured during patch_hooks.  After restoration we clear the
+        patcher's registered patches so a future patch_hooks call
+        starts fresh.
+        """
+        if hasattr(patcher, "unpatch_model"):
+            patcher.unpatch_model()
+        # Clear the registered patches so re-patching later doesn't
+        # accumulate twice.
+        if hasattr(patcher, "patches"):
+            patcher.patches.clear()
 
     @classmethod
     def combine_all_hooks(

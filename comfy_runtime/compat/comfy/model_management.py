@@ -151,6 +151,91 @@ _detect_state()
 # ---------------------------------------------------------------------------
 
 
+# Per-sub-model device pins.  None entries fall back to get_torch_device().
+# Populated by set_device_assignment() — the Phase-3 multi-GPU hook.
+_device_assignment = {
+    "unet": None,
+    "text_encoder": None,
+    "vae": None,
+    "clip_vision": None,
+    "controlnet": None,
+}
+
+
+def _coerce_device(dev):
+    """Accept ``None``, ``str``, or ``torch.device`` → ``torch.device | None``."""
+    if dev is None:
+        return None
+    if isinstance(dev, torch.device):
+        return dev
+    return torch.device(dev)
+
+
+def set_device_assignment(
+    unet=None,
+    text_encoder=None,
+    vae=None,
+    clip_vision=None,
+    controlnet=None,
+    reset: bool = True,
+) -> None:
+    """Pin sub-models to specific devices for multi-GPU deployments.
+
+    Pass individual devices (``torch.device`` objects or strings like
+    ``"cuda:0"`` / ``"cpu"``) to pin a given sub-model onto it.  Any
+    argument left as ``None`` falls back to :func:`get_torch_device`.
+
+    Calling :func:`set_device_assignment` with no arguments resets all
+    pins to ``None`` (and therefore to the default single-device
+    behavior).  Pass ``reset=False`` to update only the specified
+    slots and leave the others as-is.
+
+    Example::
+
+        # Pin text encoder to cuda:1, leave UNet on the default device
+        set_device_assignment(text_encoder="cuda:1")
+
+    Args:
+        unet:         Device for the UNet.
+        text_encoder: Device for CLIP/T5 text encoders.
+        vae:          Device for the VAE.
+        clip_vision:  Device for CLIP vision encoders.
+        controlnet:   Device for ControlNet models.
+        reset:        When ``True`` (the default), clears all other pins
+            back to ``None``.  When ``False``, leaves them untouched.
+    """
+    global _device_assignment
+    if reset:
+        _device_assignment = {k: None for k in _device_assignment}
+    _device_assignment["unet"] = _coerce_device(unet)
+    _device_assignment["text_encoder"] = _coerce_device(text_encoder)
+    _device_assignment["vae"] = _coerce_device(vae)
+    _device_assignment["clip_vision"] = _coerce_device(clip_vision)
+    _device_assignment["controlnet"] = _coerce_device(controlnet)
+
+
+def get_device_assignment(slot: str):
+    """Return the pinned device for ``slot``, or ``None`` if unpinned."""
+    return _device_assignment.get(slot)
+
+
+def get_device_list() -> list:
+    """Return the list of available compute devices.
+
+    Honors ``CUDA_VISIBLE_DEVICES`` (via ``torch.cuda.device_count()``).
+    On CPU-only hosts returns ``[torch.device("cpu")]``.  On MPS hosts
+    returns ``[torch.device("mps")]``.
+    """
+    if cpu_state == CPUState.CPU:
+        return [torch.device("cpu")]
+    if cpu_state == CPUState.MPS:
+        return [torch.device("mps")]
+    if torch.cuda.is_available():
+        count = torch.cuda.device_count()
+        return [torch.device("cuda", i) for i in range(count)]
+    return [torch.device("cpu")]
+
+
 def get_torch_device() -> torch.device:
     """Return the primary compute device."""
     if cpu_state == CPUState.MPS:
@@ -299,6 +384,27 @@ def get_free_memory(dev=None, torch_free_too=False):
 def dtype_size(dtype) -> int:
     """Return the byte size of a single element of *dtype*."""
     return torch.tensor([], dtype=dtype).element_size()
+
+
+def module_size(module) -> int:
+    """Return the total byte size of a module's ``state_dict`` tensors.
+
+    Used by ComfyUI's upscale / controlnet helper nodes to estimate how
+    much VRAM to free before loading another model.  Matches the
+    implementation in upstream ``comfy.model_management.module_size``.
+
+    Args:
+        module: Any object with a ``state_dict()`` method (typically an
+            ``nn.Module``).
+
+    Returns:
+        Total bytes occupied by the module's parameters and buffers.
+    """
+    total = 0
+    sd = module.state_dict()
+    for k in sd:
+        total += sd[k].nbytes
+    return total
 
 
 def supports_dtype(device, dtype) -> bool:
@@ -527,7 +633,14 @@ def intermediate_dtype() -> torch.dtype:
 
 
 def vae_device() -> torch.device:
-    """Return device for VAE inference."""
+    """Return device for VAE inference.
+
+    Honors the multi-GPU pin from :func:`set_device_assignment` first,
+    then ``args.cpu_vae``, then the default compute device.
+    """
+    pinned = _device_assignment.get("vae")
+    if pinned is not None:
+        return pinned
     if args.cpu_vae:
         return torch.device("cpu")
     return get_torch_device()
@@ -539,7 +652,13 @@ def vae_offload_device() -> torch.device:
 
 
 def text_encoder_device() -> torch.device:
-    """Return device for text encoder inference."""
+    """Return device for text encoder inference.
+
+    Multi-GPU pin wins over ``args.gpu_only`` and the fp16 heuristic.
+    """
+    pinned = _device_assignment.get("text_encoder")
+    if pinned is not None:
+        return pinned
     if args.gpu_only:
         return get_torch_device()
     if vram_state in (VRAMState.HIGH_VRAM, VRAMState.NORMAL_VRAM):
@@ -573,7 +692,13 @@ def unet_offload_device() -> torch.device:
 
 
 def unet_inital_load_device(parameters, dtype) -> torch.device:
-    """Return initial device for loading UNet weights."""
+    """Return initial device for loading UNet weights.
+
+    Multi-GPU pin wins over the HIGH_VRAM heuristic.
+    """
+    pinned = _device_assignment.get("unet")
+    if pinned is not None:
+        return pinned
     if vram_state == VRAMState.HIGH_VRAM:
         return get_torch_device()
     return torch.device("cpu")
@@ -635,19 +760,72 @@ class LoadedModel:
         return (0, 0)
 
     def model_load(self, lowvram_model_memory=0, force_patch_weights=False):
-        """Load the model onto the compute device."""
+        """Load the model onto the compute device.
+
+        Routes through :meth:`ModelPatcher.partially_load` so LOW_VRAM
+        / NO_VRAM budget semantics are honored in one place.  When
+        ``lowvram_model_memory == 0``, we interpret that as "full
+        load" (consistent with ComfyUI's convention for NORMAL_VRAM
+        and HIGH_VRAM callers).
+
+        For non-ModelPatcher models we fall back to ``model.to(device)``
+        (tests, standalone nn.Module fixtures, ...).
+
+        Args:
+            lowvram_model_memory: Byte budget for partial load.  0 means
+                "load everything".
+            force_patch_weights: Unused in Phase 3; reserved for the
+                weight-repatch-on-reload flow.
+        """
         model = self._model
         device = get_torch_device()
+        self.device = device
+
+        if hasattr(model, "partially_load"):
+            if lowvram_model_memory and lowvram_model_memory > 0:
+                budget = int(lowvram_model_memory)
+            else:
+                total = (
+                    model.model_size() if hasattr(model, "model_size") else 0
+                )
+                # "Full load" == budget larger than the model.
+                budget = max(total + 1, 1 << 62)
+            model.partially_load(device, extra_memory=budget)
+            return
+
         if hasattr(model, "to"):
             model.to(device)
-        self.device = device
 
     def should_reload_model(self, force_patch_weights=False) -> bool:
         return False
 
     def model_unload(self, memory_to_free=None, unpatch_weights=True) -> bool:
-        """Unload the model to CPU."""
+        """Unload the model back to its offload device.
+
+        For ModelPatcher instances this calls :meth:`partially_unload`
+        with a budget large enough to evict everything.  For plain
+        nn.Modules we fall back to ``.to("cpu")``.
+
+        Args:
+            memory_to_free: Minimum bytes to free.  If ``None`` (the
+                default) we evict everything.
+            unpatch_weights: Unused in Phase 3.
+        """
         model = self._model
+
+        if hasattr(model, "partially_unload"):
+            offload = getattr(
+                model, "offload_device", torch.device("cpu")
+            )
+            if memory_to_free is None:
+                # Evict everything: pass a budget larger than any model
+                budget = 1 << 62
+            else:
+                budget = int(memory_to_free)
+            model.partially_unload(offload, extra_memory=budget)
+            self.device = offload
+            return True
+
         if hasattr(model, "to"):
             model.to(torch.device("cpu"))
         self.device = torch.device("cpu")
@@ -679,12 +857,28 @@ def load_models_gpu(
 ):
     """Load a list of models onto the compute device.
 
+    The behavior depends on :data:`vram_state`:
+
+    * ``HIGH_VRAM`` / ``NORMAL_VRAM`` — full load via
+      :meth:`ModelPatcher.partially_load` with an infinite budget.
+    * ``LOW_VRAM`` — partial residency via ``partially_load`` with
+      ``budget = minimum_memory_required`` (the caller tells us how
+      much fits).  When the caller doesn't pass a budget we fall back
+      to half the model size, matching ComfyUI's "fit half" heuristic.
+    * ``NO_VRAM``  — budget = 0, nothing moves to the compute device.
+    * ``DISABLED`` — the caller shouldn't be invoking us, but we
+      treat it as ``NO_VRAM`` defensively.
+
     Args:
-        models: List of model objects (typically ModelPatcher instances).
-        memory_required: Extra memory headroom needed.
-        force_patch_weights: Force re-patching weights.
-        minimum_memory_required: Minimum free memory after loading.
-        force_full_load: Force loading entire model.
+        models: List of :class:`ModelPatcher`-like objects (or raw
+            nn.Module fallbacks).
+        memory_required: Extra memory headroom the caller wants.
+            Currently unused in Phase 3 — reserved for when we add
+            real accelerate-based dispatch.
+        force_patch_weights: Forwarded to :meth:`LoadedModel.model_load`.
+        minimum_memory_required: Byte budget for LOW_VRAM partial load.
+        force_full_load: When True, ignore vram_state and force a full
+            load (used by explicit high-priority ops).
     """
     global current_loaded_models
     cleanup_models_gc()
@@ -696,7 +890,6 @@ def load_models_gpu(
         if model is None:
             continue
 
-        # Check if already loaded
         already_loaded = False
         for loaded in current_loaded_models:
             if loaded.model is model or (
@@ -712,7 +905,6 @@ def load_models_gpu(
     if not models_to_load:
         return
 
-    # Free memory if needed
     total_mem_needed = (
         sum(m.model_size() if hasattr(m, "model_size") else 0 for m in models_to_load)
         + memory_required
@@ -723,11 +915,36 @@ def load_models_gpu(
             total_mem_needed, device, keep_loaded=[m for m in models if m is not None]
         )
 
-    # Load each model
+    # Resolve the per-model byte budget from vram_state.
     for model in models_to_load:
+        model_size = (
+            model.model_size() if hasattr(model, "model_size") else 0
+        )
+
+        if force_full_load or vram_state in (
+            VRAMState.HIGH_VRAM,
+            VRAMState.NORMAL_VRAM,
+            VRAMState.SHARED,
+        ):
+            budget = 0  # 0 → LoadedModel.model_load interprets as "full"
+        elif vram_state == VRAMState.LOW_VRAM:
+            if minimum_memory_required and minimum_memory_required > 0:
+                budget = int(minimum_memory_required)
+            else:
+                # ComfyUI's fallback: fit as much as half the model.
+                budget = max(1, model_size // 2)
+        elif vram_state in (VRAMState.NO_VRAM, VRAMState.DISABLED):
+            budget = 1  # positive to bypass the "0 means full" branch,
+            # but smaller than any real parameter so nothing moves.
+        else:
+            budget = 0
+
         loaded = LoadedModel(model)
         try:
-            loaded.model_load(force_patch_weights=force_patch_weights)
+            loaded.model_load(
+                lowvram_model_memory=budget,
+                force_patch_weights=force_patch_weights,
+            )
         except Exception:
             logger.warning("Failed to load model onto device, using CPU fallback")
             loaded.device = torch.device("cpu")

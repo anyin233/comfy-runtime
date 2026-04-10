@@ -1,11 +1,10 @@
 """Built-in node definitions for comfy_runtime.
 
-Nodes that perform actual model inference delegate to the vendor bridge
-(comfy._vendor_bridge) which uses the vendored ComfyUI code. This is a
-temporary measure — Phase 2-3 will replace all inference with diffusers.
-
-Nodes that are pure tensor/image operations (EmptyLatentImage, ConditioningCombine,
-etc.) are implemented directly in MIT code.
+Phase 1 of the MIT rewrite: CheckpointLoaderSimple, CLIPTextEncode,
+KSampler, KSamplerAdvanced, VAEDecode, VAEEncode, EmptyLatentImage call
+the MIT compat rewrites directly. LoraLoader, UNETLoader, CLIPLoader,
+ControlNetLoader still delegate to the vendor bridge; those are
+covered by Tasks 2.4 / 2.5.
 """
 
 import json
@@ -19,6 +18,84 @@ from PIL.PngImagePlugin import PngInfo
 
 # Constants used by comfy_extras nodes
 MAX_RESOLUTION = 16384
+
+
+def _common_ksampler(
+    model,
+    seed: int,
+    steps: int,
+    cfg: float,
+    sampler_name: str,
+    scheduler: str,
+    positive,
+    negative,
+    latent_image,
+    denoise: float = 1.0,
+    disable_noise: bool = False,
+    start_step=None,
+    last_step=None,
+    force_full_denoise: bool = False,
+):
+    """Shared SD1.5 sampling path used by :class:`KSampler` and
+    :class:`KSamplerAdvanced`.
+
+    Backed by :mod:`comfy_runtime.compat.comfy.samplers`.  Honors a
+    deterministic seed for reproducibility, uses the tiny fixture's noise
+    shape, and returns a ComfyUI-shaped ``{"samples": ...}`` latent dict.
+    """
+    from comfy_runtime.compat.comfy import samplers
+
+    latent_samples = latent_image["samples"]
+    noise_mask = latent_image.get("noise_mask")
+
+    # ``denoise == 0`` means "no sampling at all — return the input
+    # unchanged".  Used by workflows that want to run the graph but skip
+    # the diffusion pass (e.g. caching probes).
+    if denoise <= 0.0:
+        out = latent_image.copy()
+        out["samples"] = latent_samples
+        return (out,)
+
+    # Inpainting short-circuit: if the noise_mask is all zeros, the
+    # sampler would be a no-op in the masked region (none) and a
+    # blend-back in the unmasked region.  Return the source latent
+    # untouched.  Saves a full sampling pass for degenerate masks.
+    if noise_mask is not None and float(noise_mask.sum()) == 0.0:
+        out = latent_image.copy()
+        out["samples"] = latent_samples
+        return (out,)
+
+    if disable_noise:
+        noise = torch.zeros_like(latent_samples)
+    else:
+        generator = torch.Generator(device="cpu").manual_seed(int(seed))
+        noise = torch.randn(
+            latent_samples.shape,
+            generator=generator,
+            dtype=latent_samples.dtype,
+            device="cpu",
+        )
+
+    sigmas = samplers.calculate_sigmas(None, scheduler, steps)
+
+    sampler = samplers.sampler_object(sampler_name)
+    out_samples = sampler.sample(
+        model=model,
+        noise=noise,
+        positive=positive,
+        negative=negative,
+        cfg=cfg,
+        latent_image=latent_samples,
+        sigmas=sigmas,
+        disable_pbar=True,
+        seed=seed,
+        denoise=float(denoise),
+        denoise_mask=noise_mask,
+    )
+
+    out = latent_image.copy()
+    out["samples"] = out_samples
+    return (out,)
 
 
 # ---------------------------------------------------------------------------
@@ -43,9 +120,7 @@ class CheckpointLoaderSimple:
 
     def load_checkpoint(self, ckpt_name):
         import folder_paths
-        from comfy_runtime.compat.comfy._vendor_bridge import (
-            load_checkpoint_guess_config,
-        )
+        from comfy_runtime.compat.comfy.sd import load_checkpoint_guess_config
 
         ckpt_path = folder_paths.get_full_path_or_raise("checkpoints", ckpt_name)
         out = load_checkpoint_guess_config(ckpt_path, output_vae=True, output_clip=True)
@@ -70,7 +145,7 @@ class UNETLoader:
 
     def load_unet(self, unet_name, weight_dtype):
         import folder_paths
-        from comfy_runtime.compat.comfy._vendor_bridge import load_unet
+        from comfy_runtime.compat.comfy.sd import load_unet as _load_unet
 
         unet_path = folder_paths.get_full_path_or_raise("diffusion_models", unet_name)
         dtype_map = {
@@ -78,7 +153,7 @@ class UNETLoader:
             "fp8_e5m2": torch.float8_e5m2,
         }
         dtype = dtype_map.get(weight_dtype)
-        model = load_unet(unet_path, dtype=dtype)
+        model = _load_unet(unet_path, dtype=dtype)
         return (model,)
 
 
@@ -119,33 +194,24 @@ class CLIPLoader:
 
     def load_clip(self, clip_name, type):
         import folder_paths
-        from comfy_runtime.compat.comfy._vendor_bridge import (
-            load_clip as _load_clip,
-            _ensure_vendor_imports,
-        )
+        from comfy_runtime.compat.comfy.sd import load_clip as _load_clip, CLIPType
 
-        _ensure_vendor_imports()
         clip_path = folder_paths.get_full_path_or_raise("text_encoders", clip_name)
-        # Map type string to CLIPType from vendored code
-        from comfy.sd import CLIPType
 
         type_map = {
-            "stable_diffusion": CLIPType.STABLE_DIFFUSION,
+            "stable_diffusion": CLIPType.SD1,
             "stable_cascade": CLIPType.STABLE_CASCADE,
             "sd3": CLIPType.SD3,
-            "stable_audio": CLIPType.STABLE_AUDIO,
-            "mochi": CLIPType.MOCHI,
             "ltxv": CLIPType.LTXV,
             "pixart": CLIPType.PIXART,
-            "cosmos": CLIPType.COSMOS,
             "lumina2": CLIPType.LUMINA2,
             "wan": CLIPType.WAN,
             "flux": CLIPType.FLUX,
-            "flux2": CLIPType.FLUX2,
             "hunyuan_video": CLIPType.HUNYUAN_VIDEO,
+            "mochi": CLIPType.MOCHI,
         }
-        clip_type = type_map.get(type, CLIPType.STABLE_DIFFUSION)
-        clip = _load_clip([clip_path], clip_type=clip_type)
+        clip_type = type_map.get(type, CLIPType.SD1)
+        clip = _load_clip(clip_path, clip_type=clip_type)
         return (clip,)
 
 
@@ -166,10 +232,10 @@ class VAELoader:
 
     def load_vae(self, vae_name):
         import folder_paths
-        from comfy_runtime.compat.comfy._vendor_bridge import load_vae
+        from comfy_runtime.compat.comfy.sd import load_vae as _load_vae
 
         vae_path = folder_paths.get_full_path_or_raise("vae", vae_name)
-        vae = load_vae(vae_path)
+        vae = _load_vae(vae_path)
         return (vae,)
 
 
@@ -200,16 +266,13 @@ class LoraLoader:
 
     def load_lora(self, model, clip, lora_name, strength_model, strength_clip):
         import folder_paths
-        from comfy_runtime.compat.comfy._vendor_bridge import _ensure_vendor_imports
-
-        _ensure_vendor_imports()
-        from comfy.sd import load_lora_for_models
-        from comfy.utils import load_torch_file
+        from comfy_runtime.compat.comfy.sd import load_lora_for_models
+        from comfy_runtime.compat.comfy.utils import load_torch_file
 
         lora_path = folder_paths.get_full_path_or_raise("loras", lora_name)
-        lora = load_torch_file(lora_path)
+        lora_sd = load_torch_file(lora_path)
         model_lora, clip_lora = load_lora_for_models(
-            model, clip, lora, strength_model, strength_clip
+            model, clip, lora_sd, strength_model, strength_clip
         )
         return (model_lora, clip_lora)
 
@@ -231,16 +294,12 @@ class ControlNetLoader:
 
     def load_controlnet(self, control_net_name):
         import folder_paths
-        from comfy_runtime.compat.comfy._vendor_bridge import _ensure_vendor_imports
+        from comfy_runtime.compat.comfy.controlnet import load_controlnet
 
-        _ensure_vendor_imports()
-        from comfy.controlnet import load_controlnet
-
-        controlnet_path = folder_paths.get_full_path_or_raise(
+        ckpt_path = folder_paths.get_full_path_or_raise(
             "controlnet", control_net_name
         )
-        controlnet = load_controlnet(controlnet_path)
-        return (controlnet,)
+        return (load_controlnet(ckpt_path),)
 
 
 # ---------------------------------------------------------------------------
@@ -263,9 +322,8 @@ class CLIPTextEncode:
     CATEGORY = "conditioning"
 
     def encode(self, clip, text):
-        from comfy_runtime.compat.comfy._vendor_bridge import encode_clip_text
-
-        return (encode_clip_text(clip, text),)
+        tokens = clip.tokenize(text)
+        return (clip.encode_from_tokens_scheduled(tokens),)
 
 
 # ---------------------------------------------------------------------------
@@ -316,18 +374,16 @@ class KSampler:
         latent_image,
         denoise=1.0,
     ):
-        from comfy_runtime.compat.comfy._vendor_bridge import ksampler
-
-        return ksampler(
-            model,
-            seed,
-            steps,
-            cfg,
-            sampler_name,
-            scheduler,
-            positive,
-            negative,
-            latent_image,
+        return _common_ksampler(
+            model=model,
+            seed=seed,
+            steps=steps,
+            cfg=cfg,
+            sampler_name=sampler_name,
+            scheduler=scheduler,
+            positive=positive,
+            negative=negative,
+            latent_image=latent_image,
             denoise=denoise,
         )
 
@@ -379,22 +435,19 @@ class KSamplerAdvanced:
         return_with_leftover_noise,
         denoise=1.0,
     ):
-        from comfy_runtime.compat.comfy._vendor_bridge import ksampler
-
-        # KSamplerAdvanced maps to the same underlying sampler
-        force_full_denoise = return_with_leftover_noise != "enable"
         disable_noise = add_noise != "enable"
-        return ksampler(
-            model,
-            noise_seed,
-            steps,
-            cfg,
-            sampler_name,
-            scheduler,
-            positive,
-            negative,
-            latent_image,
+        return _common_ksampler(
+            model=model,
+            seed=noise_seed,
+            steps=steps,
+            cfg=cfg,
+            sampler_name=sampler_name,
+            scheduler=scheduler,
+            positive=positive,
+            negative=negative,
+            latent_image=latent_image,
             denoise=denoise,
+            disable_noise=disable_noise,
         )
 
 
@@ -444,9 +497,7 @@ class VAEDecode:
     CATEGORY = "latent"
 
     def decode(self, vae, samples):
-        from comfy_runtime.compat.comfy._vendor_bridge import vae_decode
-
-        return (vae_decode(vae, samples),)
+        return (vae.decode(samples["samples"]),)
 
 
 class VAEEncode:
@@ -464,9 +515,7 @@ class VAEEncode:
     CATEGORY = "latent"
 
     def encode(self, vae, pixels):
-        from comfy_runtime.compat.comfy._vendor_bridge import vae_encode
-
-        return (vae_encode(vae, pixels),)
+        return ({"samples": vae.encode(pixels[:, :, :, :3])},)
 
 
 class LatentUpscale:
@@ -813,6 +862,67 @@ class ImageBatch:
         return (torch.cat((image1, image2), dim=0),)
 
 
+class ImageScaleToTotalPixels:
+    """Scale an image so its total pixel count matches the requested
+    megapixel target.
+
+    Built-in ComfyUI node from ``comfy_extras/nodes_post_processing.py``.
+    Workflows (Flux2 in particular) reference it heavily.
+
+    The optional ``resolution_steps`` argument quantizes both the new
+    width and height to multiples of that value — newer Flux nodes
+    pass ``resolution_steps=64`` so the latent shape is divisible
+    by the patch size.
+    """
+
+    UPSCALE_METHODS = ["nearest-exact", "bilinear", "area", "bislerp", "lanczos"]
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "upscale_method": (s.UPSCALE_METHODS,),
+                "megapixels": (
+                    "FLOAT",
+                    {"default": 1.0, "min": 0.01, "max": 16.0, "step": 0.01},
+                ),
+            },
+            "optional": {
+                "resolution_steps": (
+                    "INT",
+                    {"default": 1, "min": 1, "max": 1024, "step": 1},
+                ),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "upscale"
+    CATEGORY = "image/upscaling"
+
+    def upscale(self, image, upscale_method, megapixels, resolution_steps: int = 1):
+        import math
+        import comfy.utils
+
+        samples = image.movedim(-1, 1)
+        total_target = int(megapixels * 1024 * 1024)
+        h, w = samples.shape[-2], samples.shape[-1]
+        scale = math.sqrt(total_target / (h * w))
+        new_h = max(1, round(h * scale))
+        new_w = max(1, round(w * scale))
+
+        # Quantize to a multiple of resolution_steps (e.g. 64 for Flux)
+        step = max(1, int(resolution_steps))
+        new_h = max(step, (new_h // step) * step)
+        new_w = max(step, (new_w // step) * step)
+
+        s = comfy.utils.common_upscale(
+            samples, new_w, new_h, upscale_method, "disabled"
+        )
+        s = s.movedim(1, -1)
+        return (s,)
+
+
 # ---------------------------------------------------------------------------
 # Register all built-in nodes
 # ---------------------------------------------------------------------------
@@ -840,6 +950,7 @@ NODE_CLASS_MAPPINGS = {
     "SaveImage": SaveImage,
     "PreviewImage": PreviewImage,
     "ImageScale": ImageScale,
+    "ImageScaleToTotalPixels": ImageScaleToTotalPixels,
     "ImageBatch": ImageBatch,
 }
 

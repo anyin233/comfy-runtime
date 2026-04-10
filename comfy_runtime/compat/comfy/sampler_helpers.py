@@ -106,3 +106,48 @@ def cleanup_additional_models(models: set):
     """
     # TODO(Phase3): Implement model cleanup.
     pass
+
+
+def prepare_mask(noise_mask: torch.Tensor, shape, device) -> torch.Tensor:
+    """Prepare a noise mask for the given latent shape.
+
+    Import-compat stub: custom nodes (e.g. ComfyUI-KJNodes) reference
+    ``comfy.sampler_helpers.prepare_mask`` at import time.  The compat
+    implementation interpolates the mask to match the target spatial
+    dims and moves it to the target device.
+
+    Args:
+        noise_mask: ``(B, 1, H, W)`` mask tensor in ``[0, 1]``.
+        shape:      Target latent shape tuple.
+        device:     Target device.
+    """
+    if noise_mask is None:
+        return None
+    mask = noise_mask
+    if mask.dim() == 3:
+        mask = mask.unsqueeze(0)
+    # Resize to match the target spatial dims
+    target_h, target_w = shape[-2], shape[-1]
+    if mask.shape[-2] != target_h or mask.shape[-1] != target_w:
+        mask = torch.nn.functional.interpolate(
+            mask, size=(target_h, target_w), mode="bilinear"
+        )
+    return mask.to(device)
+
+
+def prepare_noise(latent_image: torch.Tensor, seed: int, noise_inds=None) -> torch.Tensor:
+    """Deterministic per-seed noise generator for sampling.
+
+    Import-compat re-export (ComfyUI's original lives in
+    ``comfy.sample.prepare_noise``; many custom nodes import it from
+    ``comfy.sampler_helpers`` instead).  Uses a torch.Generator seeded
+    with the provided seed so two calls with the same seed produce
+    identical noise.
+    """
+    generator = torch.Generator(device="cpu").manual_seed(int(seed))
+    return torch.randn(
+        latent_image.shape,
+        generator=generator,
+        dtype=latent_image.dtype,
+        device="cpu",
+    )

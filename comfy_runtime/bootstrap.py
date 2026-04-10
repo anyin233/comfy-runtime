@@ -146,32 +146,60 @@ def bootstrap():
     except Exception:
         pass
 
-    # Eagerly initialise the vendor bridge and pre-import the inference
-    # modules. Without this, the first call to a node like CheckpointLoaderSimple
-    # or KSampler triggers ~1 second of importlib work that gets attributed to
-    # the node's wall time. Profiling showed this dominates apparent overhead
-    # vs upstream ComfyUI by ~1 second per workflow run. Doing it here moves
-    # the cost into ``import comfy_runtime``, where it is amortised across all
-    # subsequent calls in the same process. See
-    # docs/benchmarks/profiling_findings.md for the full investigation.
+    # Eagerly pre-import the inference modules (diffusers + transformers +
+    # our own compat layer).  Without this, the first call to a node like
+    # CheckpointLoaderSimple triggers 3-4 seconds of importlib work that
+    # gets attributed to the node's wall time.  Pre-loading here moves the
+    # cost into ``import comfy_runtime`` where it happens outside any stage
+    # timer and is amortised across every subsequent call in the same
+    # process.
+    #
+    # This supersedes the pre-merge ``perf(bootstrap): eagerly init vendor
+    # bridge ...`` commit — after the MIT rewrite the inference path is
+    # diffusers + transformers instead of ``comfy_runtime._vendor.*``, so
+    # there is no vendor bridge left to activate.
+    for _mod in (
+        # torch.* heavy submodules
+        "torch.cuda",
+        "torch.nn",
+        "torch.nn.functional",
+        # diffusers model + pipeline entry points
+        "diffusers",
+        "diffusers.models",
+        "diffusers.models.unets.unet_2d_condition",
+        "diffusers.models.autoencoders.autoencoder_kl",
+        "diffusers.pipelines.stable_diffusion",
+        "diffusers.loaders.single_file_utils",
+        "diffusers.schedulers",
+        # transformers CLIP text encoder + tokenizer
+        "transformers",
+        "transformers.models.clip.modeling_clip",
+        "transformers.models.clip.tokenization_clip",
+        "transformers.models.clip.configuration_clip",
+        # accelerate for meta-device / init_empty_weights paths
+        "accelerate",
+        # compat layer's inference modules
+        "comfy_runtime.compat.comfy.sd",
+        "comfy_runtime.compat.comfy.samplers",
+        "comfy_runtime.compat.comfy.model_patcher",
+        "comfy_runtime.compat.comfy.model_management",
+        "comfy_runtime.compat.comfy._diffusers_loader",
+        "comfy_runtime.compat.comfy._scheduler_map",
+        "comfy_runtime.compat.comfy._tokenizer",
+    ):
+        try:
+            importlib.import_module(_mod)
+        except Exception:
+            # Missing optional modules are fine — we just lose the
+            # pre-import speedup for that specific path.
+            pass
+
+    # Warm the CLIP tokenizer + config caches.  These take ~700 ms combined
+    # on first access and are functionally static across every load call,
+    # so we pay the cost once during bootstrap and the loader's hot path
+    # just reads from the module-level dict.
     try:
-        from comfy_runtime.compat.comfy._vendor_bridge import activate_vendor_bridge
-
-        activate_vendor_bridge()
-
-        for _mod in (
-            "comfy.sample",
-            "comfy.samplers",
-            "comfy.k_diffusion.sampling",
-            "comfy.ldm.modules.diffusionmodules.openaimodel",
-            "comfy.model_base",
-            "comfy.utils",
-            "comfy.sd",
-            "comfy.ldm.models.autoencoder",
-        ):
-            try:
-                importlib.import_module(_mod)
-            except Exception:
-                pass
+        from comfy_runtime.compat.comfy._diffusers_loader import prewarm_clip_caches
+        prewarm_clip_caches()
     except Exception:
         pass
