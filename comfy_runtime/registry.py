@@ -7,23 +7,36 @@ import os
 import sys
 
 from comfy_runtime.compat import nodes as _nodes_mod
+from comfy_runtime import executor as _executor
 
 
 def register_node(class_type: str, node_cls: type, display_name: str | None = None):
+    old_cls = _nodes_mod.NODE_CLASS_MAPPINGS.get(class_type)
+    if old_cls is not None and old_cls is not node_cls:
+        _executor._invalidate_caches_for(old_cls)
     _nodes_mod.NODE_CLASS_MAPPINGS[class_type] = node_cls
     if display_name is not None:
         _nodes_mod.NODE_DISPLAY_NAME_MAPPINGS[class_type] = display_name
+    _executor._invalidate_list_nodes_cache()
 
 
 def register_nodes(mappings: dict, display_names: dict | None = None):
+    for class_type, node_cls in mappings.items():
+        old_cls = _nodes_mod.NODE_CLASS_MAPPINGS.get(class_type)
+        if old_cls is not None and old_cls is not node_cls:
+            _executor._invalidate_caches_for(old_cls)
     _nodes_mod.NODE_CLASS_MAPPINGS.update(mappings)
     if display_names:
         _nodes_mod.NODE_DISPLAY_NAME_MAPPINGS.update(display_names)
+    _executor._invalidate_list_nodes_cache()
 
 
 def unregister_node(class_type: str):
-    _nodes_mod.NODE_CLASS_MAPPINGS.pop(class_type, None)
+    old_cls = _nodes_mod.NODE_CLASS_MAPPINGS.pop(class_type, None)
     _nodes_mod.NODE_DISPLAY_NAME_MAPPINGS.pop(class_type, None)
+    if old_cls is not None:
+        _executor._invalidate_caches_for(old_cls)
+    _executor._invalidate_list_nodes_cache()
 
 
 def load_nodes_from_path(path: str) -> list[str]:

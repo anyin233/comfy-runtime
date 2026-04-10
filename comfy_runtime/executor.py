@@ -17,6 +17,23 @@ class NodeExecutionError(RuntimeError):
     """Raised when a node function fails during execution."""
 
 
+# Per-class caches for introspection results. Entries survive until the
+# registry explicitly invalidates them via _invalidate_caches_for(cls),
+# which is called from registry.register_node / unregister_node when a
+# class is replaced or removed.
+_V3_CHECK_CACHE: dict[type, bool] = {}
+_COROUTINE_CACHE: dict[tuple[type, str], bool] = {}
+# Cache: (id(mappings), len(mappings)) -> tuple of sorted node names.
+# Invalidated explicitly by registry.register_node / unregister_node so
+# delete-then-add-different-name sequences with equal cardinality still work.
+_LIST_NODES_CACHE: tuple[int, int, tuple[str, ...]] | None = None
+# V1 node singleton pool. One instance per class_type. Node authors who
+# rely on per-call __init__ side effects can set _COMFY_RUNTIME_NO_POOL = True
+# on their class to opt out. Not thread-safe for concurrent same-class calls
+# (same implicit contract as before).
+_V1_INSTANCE_POOL: dict[type, object] = {}
+
+
 def get_node_class(class_type: str) -> type:
     """Return the registered class for a node type."""
     mappings = nodes.NODE_CLASS_MAPPINGS
@@ -32,11 +49,25 @@ def create_node_instance(class_type: str):
 
 
 def list_nodes() -> list[str]:
-    """Return all registered node type names."""
-    return sorted(nodes.NODE_CLASS_MAPPINGS.keys())
+    """Return all registered node type names (memoized)."""
+    global _LIST_NODES_CACHE
+    mappings = nodes.NODE_CLASS_MAPPINGS
+    key = (id(mappings), len(mappings))
+    if _LIST_NODES_CACHE is not None and _LIST_NODES_CACHE[:2] == key:
+        return list(_LIST_NODES_CACHE[2])
+    sorted_names = tuple(sorted(mappings.keys()))
+    _LIST_NODES_CACHE = (id(mappings), len(mappings), sorted_names)
+    return list(sorted_names)
 
 
-def _is_v3_node(cls: type) -> bool:
+def _invalidate_list_nodes_cache() -> None:
+    """Clear the list_nodes() memoization cache."""
+    global _LIST_NODES_CACHE
+    _LIST_NODES_CACHE = None
+
+
+def _compute_is_v3_node(cls: type) -> bool:
+    """Raw V3-detection logic (no caching)."""
     if not isinstance(cls, type):
         return False
 
@@ -54,6 +85,59 @@ def _is_v3_node(cls: type) -> bool:
         and hasattr(cls, "execute")
         and not hasattr(cls, "FUNCTION")
     )
+
+
+def _is_v3_node(cls: type) -> bool:
+    """Cached wrapper around _compute_is_v3_node.
+
+    Cache is keyed on the class object itself; entries are cleared by
+    _invalidate_caches_for when the registry replaces/removes a class.
+    """
+    cached = _V3_CHECK_CACHE.get(cls)
+    if cached is not None:
+        return cached
+    # Indirect lookup to allow monkeypatching _compute_is_v3_node in tests.
+    result = _compute_is_v3_node(cls)
+    _V3_CHECK_CACHE[cls] = result
+    return result
+
+
+def _is_async(cls: type, func_name: str) -> bool:
+    """Cached check whether cls.func_name is a coroutine function."""
+    key = (cls, func_name)
+    cached = _COROUTINE_CACHE.get(key)
+    if cached is not None:
+        return cached
+    func = getattr(cls, func_name, None)
+    result = bool(func is not None and inspect.iscoroutinefunction(func))
+    _COROUTINE_CACHE[key] = result
+    return result
+
+
+def _get_v1_instance(cls: type):
+    """Return a cached V1 node instance for *cls*, or create one.
+
+    Classes can opt out with ``_COMFY_RUNTIME_NO_POOL = True``.
+    """
+    if getattr(cls, "_COMFY_RUNTIME_NO_POOL", False):
+        return cls()
+    inst = _V1_INSTANCE_POOL.get(cls)
+    if inst is None:
+        inst = cls()
+        _V1_INSTANCE_POOL[cls] = inst
+    return inst
+
+
+def _invalidate_caches_for(cls: type) -> None:
+    """Drop all cached entries for *cls*.
+
+    Called by registry mutators when a node class is replaced or removed.
+    """
+    _V3_CHECK_CACHE.pop(cls, None)
+    stale_keys = [k for k in _COROUTINE_CACHE if k[0] is cls]
+    for k in stale_keys:
+        _COROUTINE_CACHE.pop(k, None)
+    _V1_INSTANCE_POOL.pop(cls, None)
 
 
 def _get_v3_schema(cls: type):
@@ -142,7 +226,7 @@ def execute_node(class_type: str, **kwargs):
             raise NodeExecutionError(f"Node {class_type} has no execute classmethod")
 
         try:
-            if inspect.iscoroutinefunction(func):
+            if _is_async(cls, "execute"):
                 result = asyncio.run(func(**kwargs))
             else:
                 result = func(**kwargs)
@@ -153,7 +237,7 @@ def execute_node(class_type: str, **kwargs):
 
         return _unwrap_v3_result(result)
 
-    instance = cls()
+    instance = _get_v1_instance(cls)
     func_name = getattr(cls, "FUNCTION", None)
     if func_name is None:
         raise NodeExecutionError(f"Node {class_type} has no FUNCTION attribute")
@@ -161,7 +245,7 @@ def execute_node(class_type: str, **kwargs):
     func = getattr(instance, func_name)
 
     try:
-        if inspect.iscoroutinefunction(func):
+        if _is_async(cls, func_name):
             result = asyncio.run(func(**kwargs))
         else:
             result = func(**kwargs)
