@@ -21,10 +21,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
 
-# NOTE: flux2_klein_text_to_image is excluded by default because of a
-# pre-existing matmul shape error in the vendored Flux2 sampler that
-# reproduces even from the workflow's own .venv in the parent repo. Pass
-# --workflow flux2_klein_text_to_image explicitly to attempt it.
 ALL_WORKFLOWS = [
     "sd15_text_to_image",
     "img2img",
@@ -32,6 +28,7 @@ ALL_WORKFLOWS = [
     "hires_fix",
     "area_composition",
     "esrgan_upscale",
+    "flux2_klein_text_to_image",
 ]
 
 DEFAULT_RUNS_PER_SIDE = 4   # 1 warmup + 3 timed

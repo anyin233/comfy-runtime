@@ -207,13 +207,41 @@ def activate_vendor_bridge():
 
 
 def _vendor_import(dotted_name):
-    """Import a module directly from the _vendor package.
+    """Import a module from the vendored comfy tree.
 
-    Bypasses the shim completely so that we always get the vendored
-    version, not the compat stub.
+    After :func:`_ensure_vendor_imports` runs, ``sys.modules[<dotted_name>]``
+    is wired to the vendored package (via ``sys.modules["comfy"] = vendor_comfy``
+    plus the ldm chain + standalone modules explicitly patched in
+    ``_ensure_vendor_imports``). Return THAT entry rather than re-importing
+    via the full ``comfy_runtime._vendor.<dotted_name>`` path.
+
+    **Why this matters**: importing via the full prefix creates a *second*,
+    independent module object executing the same file. Classes (particularly
+    enums like ``CLIPType``) defined in the two copies are not ``is``-equal
+    and do not compare equal with ``==``. A caller that does
+    ``from comfy.sd import CLIPType; clip_type=CLIPType.FLUX2`` and then
+    passes ``clip_type`` into a function loaded via
+    ``importlib.import_module("comfy_runtime._vendor.comfy.sd")`` will see
+    every ``clip_type == CLIPType.FLUX2`` check fall through, silently
+    selecting the wrong branch.
+
+    This bug manifested as Flux2 Klein loading the Z-Image text encoder
+    (2560-dim output) instead of the Klein text encoder (7680-dim output),
+    causing the diffusion model's Linear layer to reject the tensor shape
+    with ``mat1 and mat2 shapes cannot be multiplied (1024x2560 and
+    7680x3072)`` deep inside the sampler. See
+    ``docs/benchmarks/profiling_findings.md`` for the full trace.
     """
     _ensure_vendor_imports()
-    return importlib.import_module(f"comfy_runtime._vendor.{dotted_name}")
+    # Prefer the already-loaded module registered under the short name.
+    mod = sys.modules.get(dotted_name)
+    if mod is None:
+        mod = importlib.import_module(dotted_name)
+    # Pin the full-prefix alias so any code that *does* look up the long
+    # name gets the same module object, not a freshly-executed copy.
+    full_name = f"comfy_runtime._vendor.{dotted_name}"
+    sys.modules[full_name] = mod
+    return mod
 
 
 def load_checkpoint_guess_config(

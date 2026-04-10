@@ -130,13 +130,6 @@ def main() -> int:
     bench_root = Path(__file__).resolve().parent
     repo_root = bench_root.parent.parent
 
-    # NOTE: flux2_klein_text_to_image is intentionally excluded from the
-    # default sweep because of a pre-existing matmul shape mismatch
-    # (`mat1 and mat2 shapes cannot be multiplied (1024x2560 and 7680x3072)`)
-    # in the vendored Flux2 sampler pipeline, reproducible even with the
-    # workflow's own .venv in the parent repo. This is a comfy_runtime
-    # upstream issue unrelated to the benchmark harness. Pass
-    # `--workflow flux2_klein_text_to_image` explicitly to attempt it.
     all_workflows = [
         "sd15_text_to_image",
         "img2img",
@@ -144,6 +137,7 @@ def main() -> int:
         "hires_fix",
         "area_composition",
         "esrgan_upscale",
+        "flux2_klein_text_to_image",
     ]
     workflows = [args.workflow] if args.workflow else all_workflows
 
