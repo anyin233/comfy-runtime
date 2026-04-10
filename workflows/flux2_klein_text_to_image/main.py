@@ -131,6 +131,13 @@ def main():
         text="",
     )[0]
 
+    # Evict the text encoder (Qwen 3 4B, ~8 GB) before sampling loads the
+    # diffusion model weights. Without this, the 24 GB VRAM ceiling forces
+    # VAE decode into tiled fallback mode and the whole workflow pays a
+    # ~700 ms penalty. See docs/benchmarks/profiling_findings.md.
+    print("=== Releasing text encoder ===")
+    comfy_runtime.unload_all_models()
+
     # Step 8: Create CFG Guider
     print(f"\n=== Creating CFG Guider (cfg={CFG}) ===")
     guider = comfy_runtime.execute_node(
@@ -184,6 +191,12 @@ def main():
         latent_image=latent,
     )
     print("Sampling complete.")
+
+    # Evict the diffusion model (Flux.2 Klein 4B, ~8 GB) before VAE decode.
+    # Without this, VAE decode hits the 24 GB VRAM ceiling and falls back
+    # to tiled decoding, which is ~4x slower.
+    print("=== Releasing diffusion model ===")
+    comfy_runtime.unload_all_models()
 
     # Step 14: Decode latent to image
     print("\n=== Decoding VAE ===")
