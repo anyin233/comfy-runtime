@@ -151,6 +151,91 @@ _detect_state()
 # ---------------------------------------------------------------------------
 
 
+# Per-sub-model device pins.  None entries fall back to get_torch_device().
+# Populated by set_device_assignment() — the Phase-3 multi-GPU hook.
+_device_assignment = {
+    "unet": None,
+    "text_encoder": None,
+    "vae": None,
+    "clip_vision": None,
+    "controlnet": None,
+}
+
+
+def _coerce_device(dev):
+    """Accept ``None``, ``str``, or ``torch.device`` → ``torch.device | None``."""
+    if dev is None:
+        return None
+    if isinstance(dev, torch.device):
+        return dev
+    return torch.device(dev)
+
+
+def set_device_assignment(
+    unet=None,
+    text_encoder=None,
+    vae=None,
+    clip_vision=None,
+    controlnet=None,
+    reset: bool = True,
+) -> None:
+    """Pin sub-models to specific devices for multi-GPU deployments.
+
+    Pass individual devices (``torch.device`` objects or strings like
+    ``"cuda:0"`` / ``"cpu"``) to pin a given sub-model onto it.  Any
+    argument left as ``None`` falls back to :func:`get_torch_device`.
+
+    Calling :func:`set_device_assignment` with no arguments resets all
+    pins to ``None`` (and therefore to the default single-device
+    behavior).  Pass ``reset=False`` to update only the specified
+    slots and leave the others as-is.
+
+    Example::
+
+        # Pin text encoder to cuda:1, leave UNet on the default device
+        set_device_assignment(text_encoder="cuda:1")
+
+    Args:
+        unet:         Device for the UNet.
+        text_encoder: Device for CLIP/T5 text encoders.
+        vae:          Device for the VAE.
+        clip_vision:  Device for CLIP vision encoders.
+        controlnet:   Device for ControlNet models.
+        reset:        When ``True`` (the default), clears all other pins
+            back to ``None``.  When ``False``, leaves them untouched.
+    """
+    global _device_assignment
+    if reset:
+        _device_assignment = {k: None for k in _device_assignment}
+    _device_assignment["unet"] = _coerce_device(unet)
+    _device_assignment["text_encoder"] = _coerce_device(text_encoder)
+    _device_assignment["vae"] = _coerce_device(vae)
+    _device_assignment["clip_vision"] = _coerce_device(clip_vision)
+    _device_assignment["controlnet"] = _coerce_device(controlnet)
+
+
+def get_device_assignment(slot: str):
+    """Return the pinned device for ``slot``, or ``None`` if unpinned."""
+    return _device_assignment.get(slot)
+
+
+def get_device_list() -> list:
+    """Return the list of available compute devices.
+
+    Honors ``CUDA_VISIBLE_DEVICES`` (via ``torch.cuda.device_count()``).
+    On CPU-only hosts returns ``[torch.device("cpu")]``.  On MPS hosts
+    returns ``[torch.device("mps")]``.
+    """
+    if cpu_state == CPUState.CPU:
+        return [torch.device("cpu")]
+    if cpu_state == CPUState.MPS:
+        return [torch.device("mps")]
+    if torch.cuda.is_available():
+        count = torch.cuda.device_count()
+        return [torch.device("cuda", i) for i in range(count)]
+    return [torch.device("cpu")]
+
+
 def get_torch_device() -> torch.device:
     """Return the primary compute device."""
     if cpu_state == CPUState.MPS:
@@ -527,7 +612,14 @@ def intermediate_dtype() -> torch.dtype:
 
 
 def vae_device() -> torch.device:
-    """Return device for VAE inference."""
+    """Return device for VAE inference.
+
+    Honors the multi-GPU pin from :func:`set_device_assignment` first,
+    then ``args.cpu_vae``, then the default compute device.
+    """
+    pinned = _device_assignment.get("vae")
+    if pinned is not None:
+        return pinned
     if args.cpu_vae:
         return torch.device("cpu")
     return get_torch_device()
@@ -539,7 +631,13 @@ def vae_offload_device() -> torch.device:
 
 
 def text_encoder_device() -> torch.device:
-    """Return device for text encoder inference."""
+    """Return device for text encoder inference.
+
+    Multi-GPU pin wins over ``args.gpu_only`` and the fp16 heuristic.
+    """
+    pinned = _device_assignment.get("text_encoder")
+    if pinned is not None:
+        return pinned
     if args.gpu_only:
         return get_torch_device()
     if vram_state in (VRAMState.HIGH_VRAM, VRAMState.NORMAL_VRAM):
@@ -573,7 +671,13 @@ def unet_offload_device() -> torch.device:
 
 
 def unet_inital_load_device(parameters, dtype) -> torch.device:
-    """Return initial device for loading UNet weights."""
+    """Return initial device for loading UNet weights.
+
+    Multi-GPU pin wins over the HIGH_VRAM heuristic.
+    """
+    pinned = _device_assignment.get("unet")
+    if pinned is not None:
+        return pinned
     if vram_state == VRAMState.HIGH_VRAM:
         return get_torch_device()
     return torch.device("cpu")
