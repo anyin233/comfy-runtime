@@ -422,17 +422,35 @@ def bislerp(samples, width, height):
 
 
 def lanczos(samples, width, height):
-    """Lanczos upscale via PIL (per-sample, per-channel)."""
-    result = []
-    for sample in samples:
-        channels = []
-        for c in range(sample.shape[0]):
-            arr = sample[c].cpu().numpy()
-            img = Image.fromarray(arr.astype(np.float32), mode="F")
-            img = img.resize((width, height), Image.LANCZOS)
-            channels.append(torch.from_numpy(np.array(img)))
-        result.append(torch.stack(channels))
-    return torch.stack(result).to(samples.device)
+    """Upscale *samples* to (height, width) using a fast torch path.
+
+    Uses torch.nn.functional.interpolate with bicubic + antialias as a
+    perceptually-close, fully on-device substitute for PIL's Lanczos.
+    Falls back to the legacy PIL per-channel loop on older torch builds
+    that don't support antialias=True.
+    """
+    try:
+        from torch.nn.functional import interpolate
+
+        return interpolate(
+            samples,
+            size=(height, width),
+            mode="bicubic",
+            align_corners=False,
+            antialias=True,
+        )
+    except (TypeError, RuntimeError):
+        # Legacy PIL path — bit-exact Lanczos via per-channel CPU round-trip.
+        result = []
+        for sample in samples:
+            channels = []
+            for c in range(sample.shape[0]):
+                arr = sample[c].cpu().numpy()
+                img = Image.fromarray(arr.astype(np.float32), mode="F")
+                img = img.resize((width, height), Image.LANCZOS)
+                channels.append(torch.from_numpy(np.array(img)))
+            result.append(torch.stack(channels))
+        return torch.stack(result).to(samples.device)
 
 
 def common_upscale(samples, width, height, upscale_method, crop):
